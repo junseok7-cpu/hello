@@ -14,6 +14,7 @@ Replace any <scene>.mp3 with your own recording and rerun with --keep-audio.
 import argparse
 import json
 import subprocess
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -28,9 +29,28 @@ def duration(path):
 
 
 def tts(text, out, voice):
-    from gtts import gTTS
+    """voice.engine: "edge" (Microsoft neural voices, e.g. ko-KR-HyunsuMultilingualNeural)
+    or "gtts" (Google, one female voice). edge accepts name, pitch ("-12Hz"), rate ("-3%")."""
+    import os
+
     tmp = out.with_suffix(".raw.mp3")
-    gTTS(text, lang=voice.get("lang", "ko")).save(str(tmp))
+    if voice.get("engine") == "edge":
+        cmd = ["edge-tts", "-v", voice.get("name", "ko-KR-InJoonNeural"),
+               f"--pitch={voice.get('pitch', '+0Hz')}", f"--rate={voice.get('rate', '+0%')}",
+               "-t", text, "--write-media", str(tmp)]
+        proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+        if proxy:  # edge-tts uses a websocket that ignores proxy env vars
+            cmd[1:1] = ["--proxy", proxy]
+        for attempt in range(4):  # the service drops connections now and then
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            if res.returncode == 0:
+                break
+            time.sleep(2 * (attempt + 1))
+        else:
+            raise RuntimeError(f"edge-tts failed: {res.stderr.strip().splitlines()[-1:]}")
+    else:
+        from gtts import gTTS
+        gTTS(text, lang=voice.get("lang", "ko")).save(str(tmp))
     # speed up a little and trim leading/trailing silence
     af = (f"atempo={voice.get('tempo', 1.0)},"
           "silenceremove=start_periods=1:start_threshold=-45dB,"
