@@ -1,0 +1,11 @@
+# media files stay local (copyright + size)
+raw/*
+refs/*
+output/*
+!raw/.gitkeep
+!refs/.gitkeep
+!output/.gitkeep
+work/
+__pycache__/
+.ruff_cache/
+node_modules/
