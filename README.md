@@ -30,6 +30,19 @@ FFmpeg도 필요합니다 (macOS: `brew install ffmpeg`).
 
 결과물은 `output/<이름>_check.mp4`에 나옵니다.
 
+## 촬영본 없이 모션 영상 만들기 (Remotion)
+
+대본만 있으면 일러스트 애니메이션 + 나레이션 + 자막 쇼츠를 만듭니다. 예시: `motion/src/milmyeon/` (우암동 소막과 밀면, 41초)
+
+```bash
+python scripts/narrate.py motion/src/milmyeon/script.json   # 나레이션 + 타이밍
+cd motion && npm install
+npx remotion studio                                          # 브라우저에서 미리보기
+npx remotion render src/index.ts Milmyeon ../output/milmyeon.mp4
+```
+
+내 목소리로 바꾸려면 `motion/public/milmyeon/<장면>.mp3`를 녹음 파일로 교체하고 `narrate.py ... --keep-audio`를 다시 실행하세요.
+
 ## 직접 실행
 
 ```bash
