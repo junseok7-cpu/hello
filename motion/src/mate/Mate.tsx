@@ -449,6 +449,12 @@ const ClockIcon = () => (
     <path d="M12 7v5l3 2" />
   </svg>
 );
+const ChatIcon = () => (
+  <svg width={30} height={30} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 5h16v11H9l-5 4z" />
+    <path d="M8.5 10.5l2.3 2.3L15.5 8" />
+  </svg>
+);
 const SearchIcon: React.FC<{ size?: number; color?: string }> = ({ size = 52, color = BLUE }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.8} strokeLinecap="round">
     <circle cx="11" cy="11" r="7" />
@@ -812,14 +818,15 @@ const TOP3 = [
 const Research: React.FC<SceneProps> = ({ scene }) => {
   const f = useCurrentFrame();
   const c1 = cap(scene, 1);
-  const c2 = cap(scene, 2);
-  const c3 = cap(scene, 3);
+  const c2 = cap(scene, 3);
+  const c3 = cap(scene, 4);
+  const c4 = cap(scene, 5);
   const team = useSpring(2, 12);
   const teamOut = interpolate(f, [c1 - 6, c1 + 4], [0, 1], clamp);
   const highlight = interpolate(f, [c2 - 4, c2 + 8], [0, 1], clamp);
   const gather = interpolate(f, [c2 + 18, c2 + 36], [0, 1], { ...clamp, easing: (t) => t * t * (3 - 2 * t) });
   const tilesAt = c2 + 34;
-  const gridOut = interpolate(f, [c3 - 4, c3 + 8], [0, 1], clamp);
+  const gridOut = interpolate(f, [c4 - 4, c4 + 8], [0, 1], clamp);
   const count = Math.round(interpolate(f, [c1, c1 + 40], [0, 60], clamp));
   return (
     <AbsoluteFill>
@@ -870,18 +877,43 @@ const Research: React.FC<SceneProps> = ({ scene }) => {
               }}
             >
               <Tile c={c} w={460} />
+              {/* contacted current employees */}
+              {f >= c3 + i * 2 - 2 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: -14,
+                    top: -26,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    background: BLUE,
+                    color: "#fff",
+                    fontFamily,
+                    fontWeight: 900,
+                    fontSize: 26,
+                    padding: "8px 16px 8px 10px",
+                    borderRadius: 999,
+                    boxShadow: "0 8px 20px rgba(37,99,235,0.45)",
+                    transform: `scale(${spring({ frame: f - c3 - i * 2, fps: 30, config: { damping: 9, stiffness: 220 } })}) rotate(4deg)`,
+                  }}
+                >
+                  <ChatIcon />
+                  현직자 연락
+                </div>
+              )}
             </div>
           );
         })}
       {/* criteria + scores */}
-      {f >= c3 - 4 && (
+      {f >= c4 - 4 && (
         <>
-          <div style={{ position: "absolute", top: 290, width: "100%", textAlign: "center", fontFamily, fontWeight: 900, fontSize: 64, color: NAVY, letterSpacing: -2, opacity: interpolate(f, [c3 - 4, c3 + 6], [0, 1], clamp) }}>
+          <div style={{ position: "absolute", top: 290, width: "100%", textAlign: "center", fontFamily, fontWeight: 900, fontSize: 64, color: NAVY, letterSpacing: -2, opacity: interpolate(f, [c4 - 4, c4 + 6], [0, 1], clamp) }}>
             9개 항목 · <span style={{ color: BLUE }}>45점</span> 만점 평가
           </div>
           <div style={{ position: "absolute", top: 410, left: 70, width: 940, display: "flex", flexWrap: "wrap", gap: 18, justifyContent: "center" }}>
             {CRITERIA.map((t, i) => {
-              const s = spring({ frame: f - c3 - i * 2, fps: 30, config: { damping: 11, stiffness: 200 } });
+              const s = spring({ frame: f - c4 - i * 2, fps: 30, config: { damping: 11, stiffness: 200 } });
               return (
                 <div key={t} style={{ fontFamily, fontWeight: 900, fontSize: 42, color: BLUE, background: "#fff", border: `4px solid ${BLUE}`, borderRadius: 999, padding: "10px 28px", transform: `scale(${s})` }}>
                   {t}
@@ -890,7 +922,7 @@ const Research: React.FC<SceneProps> = ({ scene }) => {
             })}
           </div>
           {TOP3.map(([code, name, score], i) => {
-            const st = c3 + 8 + i * 5;
+            const st = c4 + 8 + i * 5;
             const grow = interpolate(f, [st, st + 20], [0, 1], { ...clamp, easing: (t) => 1 - Math.pow(1 - t, 3) });
             const s = spring({ frame: f - st + 4, fps: 30, config: { damping: 13 } });
             return (
