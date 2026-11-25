@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Re-time caption chunks in a timing.json to the spoken words (faster-whisper word timestamps).
 
-Usage: python scripts/align.py motion/src/<id>/timing.json [--replace "열두 개=12개"]
+Usage: python scripts/align.py motion/src/<id>/timing.json [--replace "열두 개=12개"] [--only <scene>]
 Run after narrate.py. Chunks keep their text; only from/to move.
 """
 import argparse, json, re, subprocess
@@ -26,12 +26,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("timing")
     ap.add_argument("--replace", action="append", default=[], help="caption text a=b")
+    ap.add_argument("--only", action="append", default=[], help="scene id(s) to align; others keep their timing")
     a = ap.parse_args()
     path = Path(a.timing)
     t = json.loads(path.read_text(encoding="utf-8"))
     fps = t["fps"]
     model = WhisperModel("small", compute_type="int8")
     for sc in t["scenes"]:
+        if a.only and sc["id"] not in a.only:
+            continue
         segs, _ = model.transcribe(load(ROOT / "motion/public" / sc["audio"]), language="ko",
                                    word_timestamps=True)
         words = [w for s in segs for w in s.words]

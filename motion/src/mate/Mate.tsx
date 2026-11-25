@@ -12,6 +12,7 @@ import {
 } from "remotion";
 import timing from "./timing.json";
 import taps from "./taps.json";
+import companies from "./companies.json";
 import { clamp, fontFamily, loadFonts } from "../common/ui";
 
 loadFonts();
@@ -181,6 +182,99 @@ const Tile: React.FC<{ c: readonly [string, string, string]; w?: number; style?:
   </div>
 );
 
+
+// ---------------------------------------------------------------- mountain of company names (from the team's list)
+const chipW = (n: string) => 34 + [...n].reduce((w, ch) => w + (/[가-힣]/.test(ch) ? 28 : ch === " " ? 8 : /[A-Z&]/.test(ch) ? 19 : 16), 0);
+const PICKED: string[] = companies.picked;
+const PILE = (() => {
+  // spread the picked companies through the pile with a fixed shuffle
+  const names = companies.all.map((n, i) => ({ n, k: (i * 29 + 7) % companies.all.length })).sort((a, b) => a.k - b.k).map((x) => x.n);
+  const out: { n: string; x: number; y: number; w: number }[] = [];
+  let row: { n: string; w: number }[] = [];
+  let r = 0;
+  const flush = () => {
+    const total = row.reduce((a, c) => a + c.w, 0) + (row.length - 1) * 8;
+    let x = 540 - total / 2 + (r % 2 ? 10 : -10);
+    for (const c of row) {
+      out.push({ n: c.n, x, y: 1400 - (r + 1) * 52, w: c.w });
+      x += c.w + 8;
+    }
+    row = [];
+    r++;
+  };
+  for (const n of names) {
+    const w = chipW(n);
+    const max = Math.max(200, 1070 - r * 42);
+    const cur = row.reduce((a, c) => a + c.w + 8, 0);
+    if (row.length && cur + w > max) flush();
+    row.push({ n, w });
+  }
+  if (row.length) flush();
+  return out;
+})();
+
+/** grid slot centers of the 10-company tiles (Research scene) */
+const gridCenter = (i: number) => [i % 2 ? 785 : 295, 364 + Math.floor(i / 2) * 222];
+
+const Mountain: React.FC<{ start: number; per: number; highlight?: number; gather?: number; wobble?: number }> = ({
+  start,
+  per,
+  highlight = 0,
+  gather = 0,
+  wobble = 0,
+}) => {
+  const f = useCurrentFrame();
+  return (
+    <>
+      {PILE.map((c, i) => {
+        const s = spring({ frame: f - start - i * per, fps: 30, config: { damping: 14, stiffness: 170, mass: 0.6 } });
+        if (s < 0.001) return null;
+        const pi = PICKED.indexOf(c.n);
+        const picked = pi >= 0;
+        const h = picked ? highlight : 0;
+        let x = c.x;
+        let y = c.y - (1 - s) * 1500;
+        if (picked && gather > 0) {
+          const [gx, gy] = gridCenter(pi);
+          x = x + (gx - c.w / 2 - x) * gather;
+          y = y + (gy - 22 - y) * gather;
+        }
+        const wob = wobble * Math.sin(f / 4 + i * 1.7) * 10;
+        return (
+          <div
+            key={c.n}
+            style={{
+              position: "absolute",
+              left: x + wob,
+              top: y,
+              width: c.w,
+              height: 44,
+              borderRadius: 12,
+              background: h > 0.5 ? BLUE : "#fff",
+              border: `3px solid ${h > 0.5 ? BLUE : "#CBD5E1"}`,
+              color: h > 0.5 ? "#fff" : NAVY,
+              fontFamily,
+              fontWeight: 900,
+              fontSize: 27,
+              letterSpacing: -0.5,
+              whiteSpace: "nowrap",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: h > 0.5 ? "0 12px 30px rgba(37,99,235,0.45)" : "0 6px 14px rgba(23,35,59,0.12)",
+              opacity: picked ? 1 - gather * 0.0 : 1 - 0.85 * highlight,
+              transform: `scale(${1 + 0.22 * h * (1 - gather)}) rotate(${wob * 0.4}deg)`,
+              zIndex: picked ? 2 : 1,
+            }}
+          >
+            {c.n}
+          </div>
+        );
+      })}
+    </>
+  );
+};
+
 // ---------------------------------------------------------------- phone with real screenshots
 const SHOT_W = 860; // screenshots are 430px @2x
 const SHOT_H = 1864;
@@ -302,7 +396,7 @@ const SearchIcon: React.FC<{ size?: number; color?: string }> = ({ size = 52, co
 );
 
 // ================================================================ 1. hook
-const RESEARCH_NOTES = ["매출액", "복지 제도", "근무지", "직원 리뷰", "채용 공고", "연봉", "성장성", "ESG", "직무", "통근", "기업 문화", "재무제표"];
+const RESEARCH_NOTES = ["매출액", "직원 리뷰", "복지 제도", "채용 공고", "근무지", "연봉", "성장성", "ESG"];
 
 const Hook: React.FC<SceneProps> = ({ scene, dur }) => {
   const f = useCurrentFrame();
@@ -316,7 +410,7 @@ const Hook: React.FC<SceneProps> = ({ scene, dur }) => {
   const chaos = interpolate(f, [c3, c4], [0, 1], clamp);
   const dark = interpolate(f, [c4 - 4, c4 + 10], [0, 1], clamp);
   const zoom = interpolate(f, [c3, dur], [1, 1.12], clamp);
-  const tabs = Math.floor(interpolate(f, [c2, c3 + 20], [3, 47], clamp));
+  const tabs = Math.floor(interpolate(f, [c2, c3 + 20], [3, 63], clamp));
   return (
     <AbsoluteFill>
       <Backdrop />
@@ -327,7 +421,7 @@ const Hook: React.FC<SceneProps> = ({ scene, dur }) => {
             position: "absolute",
             left: 90,
             width: 900,
-            top: interpolate(barUp, [0, 1], [760, 330]),
+            top: interpolate(barUp, [0, 1], [760, 250]),
             height: 150,
             borderRadius: 999,
             background: "#fff",
@@ -352,8 +446,8 @@ const Hook: React.FC<SceneProps> = ({ scene, dur }) => {
           <div
             style={{
               position: "absolute",
-              right: 110,
-              top: 230,
+              right: 100,
+              top: 170,
               background: "#EF4444",
               color: "#fff",
               fontFamily,
@@ -367,36 +461,14 @@ const Hook: React.FC<SceneProps> = ({ scene, dur }) => {
             열린 탭 {tabs}개
           </div>
         )}
-        {/* companies raining in */}
-        {COMPANIES.map((c, i) => {
-          const d = c1 + i * 3;
-          const s = spring({ frame: f - d, fps: 30, config: { damping: 11, stiffness: 120 } });
-          const col = i % 2;
-          const tx = col ? 560 + ((i * 37) % 60) : 60 + ((i * 53) % 70);
-          const ty = 560 + Math.floor(i / 2) * 170 + ((i * 29) % 40);
-          const rot = ((i * 47) % 24) - 12;
-          const wob = chaos * Math.sin(f / 4 + i) * 14;
-          return (
-            <div
-              key={c[1]}
-              style={{
-                position: "absolute",
-                left: tx + wob,
-                top: ty + (1 - s) * (col ? -900 : 1300),
-                transform: `rotate(${rot * s + wob * 0.5}deg)`,
-                opacity: s > 0.01 ? 1 : 0,
-              }}
-            >
-              <Tile c={c} w={430} />
-            </div>
-          );
-        })}
+        {/* company names stacking up from the bottom like a mountain */}
+        <Mountain start={c1 - 2} per={(c3 - c1 - 6) / PILE.length} wobble={chaos} />
         {/* research notes piling up */}
         {RESEARCH_NOTES.map((n, i) => {
           const d = c2 + i * 3.5;
           const s = spring({ frame: f - d, fps: 30, config: { damping: 12, stiffness: 150 } });
-          const tx = 70 + ((i * 271) % 760);
-          const ty = 470 + ((i * 389) % 900);
+          const tx = i % 2 ? 730 + ((i * 37) % 70) : 40 + ((i * 53) % 60);
+          const ty = 470 + Math.floor(i / 2) * 120 + ((i * 29) % 30);
           const rot = ((i * 71) % 30) - 15;
           const wob = chaos * Math.cos(f / 3.5 + i * 2) * 18;
           return (
@@ -680,13 +752,18 @@ const Research: React.FC<SceneProps> = ({ scene }) => {
   const f = useCurrentFrame();
   const c1 = cap(scene, 1);
   const c2 = cap(scene, 2);
+  const c3 = cap(scene, 3);
   const team = useSpring(2, 12);
   const teamOut = interpolate(f, [c1 - 6, c1 + 4], [0, 1], clamp);
-  const gridOut = interpolate(f, [c2 - 4, c2 + 8], [0, 1], clamp);
+  const highlight = interpolate(f, [c2 - 4, c2 + 8], [0, 1], clamp);
+  const gather = interpolate(f, [c2 + 18, c2 + 36], [0, 1], { ...clamp, easing: (t) => t * t * (3 - 2 * t) });
+  const tilesAt = c2 + 34;
+  const gridOut = interpolate(f, [c3 - 4, c3 + 8], [0, 1], clamp);
+  const count = Math.round(interpolate(f, [c1, c1 + 40], [0, 60], clamp));
   return (
     <AbsoluteFill>
       <Backdrop />
-      <Label text="직접 조사한 10개 기업" />
+      <Label text={scene.label} />
       {/* team badge */}
       {teamOut < 1 && (
         <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", opacity: 1 - teamOut, transform: `scale(${(0.7 + 0.3 * team) * (1 - 0.3 * teamOut)})` }}>
@@ -697,11 +774,27 @@ const Research: React.FC<SceneProps> = ({ scene }) => {
           <div style={{ fontFamily, fontWeight: 900, fontSize: 130, color: NAVY, letterSpacing: -4 }}>홈스윗홈</div>
         </AbsoluteFill>
       )}
-      {/* 10 tiles in order: the same cards that were chaos in the hook */}
-      {f >= c1 - 4 &&
+      {/* the same mountain from the opening; the 10 picked ones light up and line up */}
+      {f >= c1 - 4 && f < tilesAt + 8 && (
+        <AbsoluteFill style={{ opacity: interpolate(f, [tilesAt, tilesAt + 8], [1, 0], clamp) }}>
+          <Mountain start={c1 - 4} per={0.6} highlight={highlight} gather={gather} />
+        </AbsoluteFill>
+      )}
+      {f >= c1 && f < c2 && (
+        <div style={{ position: "absolute", top: 270, width: "100%", textAlign: "center", fontFamily, fontWeight: 900, fontSize: 96, color: NAVY, letterSpacing: -3, opacity: interpolate(f, [c2 - 8, c2], [1, 0], clamp) }}>
+          {count}<span style={{ fontSize: 56 }}>여 곳</span>
+        </div>
+      )}
+      {f >= c2 - 4 && f < c2 + 30 && (
+        <div style={{ position: "absolute", top: 270, width: "100%", textAlign: "center", fontFamily, fontWeight: 900, fontSize: 96, color: BLUE, letterSpacing: -3, opacity: interpolate(f, [c2, c2 + 8, c2 + 22, c2 + 30], [0, 1, 1, 0], clamp) }}>
+          10<span style={{ fontSize: 56 }}>곳 선정</span>
+        </div>
+      )}
+      {/* 10 tiles */}
+      {f >= tilesAt &&
         gridOut < 1 &&
         COMPANIES.map((c, i) => {
-          const s = spring({ frame: f - (c1 - 2) - i * 3, fps: 30, config: { damping: 12, stiffness: 170 } });
+          const s = spring({ frame: f - tilesAt - i, fps: 30, config: { damping: 12, stiffness: 190 } });
           const col = i % 2;
           const row = Math.floor(i / 2);
           return (
@@ -711,8 +804,8 @@ const Research: React.FC<SceneProps> = ({ scene }) => {
                 position: "absolute",
                 left: col ? 555 : 65,
                 top: 300 + row * 222 - gridOut * 120,
-                transform: `scale(${s * (1 - 0.4 * gridOut)})`,
-                opacity: (1 - gridOut) * (s > 0.01 ? 1 : 0),
+                transform: `scale(${(0.85 + 0.15 * s) * (1 - 0.4 * gridOut)})`,
+                opacity: (1 - gridOut) * s,
               }}
             >
               <Tile c={c} w={460} />
@@ -720,14 +813,14 @@ const Research: React.FC<SceneProps> = ({ scene }) => {
           );
         })}
       {/* criteria + scores */}
-      {f >= c2 - 4 && (
+      {f >= c3 - 4 && (
         <>
-          <div style={{ position: "absolute", top: 290, width: "100%", textAlign: "center", fontFamily, fontWeight: 900, fontSize: 64, color: NAVY, letterSpacing: -2, opacity: interpolate(f, [c2 - 4, c2 + 6], [0, 1], clamp) }}>
+          <div style={{ position: "absolute", top: 290, width: "100%", textAlign: "center", fontFamily, fontWeight: 900, fontSize: 64, color: NAVY, letterSpacing: -2, opacity: interpolate(f, [c3 - 4, c3 + 6], [0, 1], clamp) }}>
             9개 항목 · <span style={{ color: BLUE }}>45점</span> 만점 평가
           </div>
           <div style={{ position: "absolute", top: 410, left: 70, width: 940, display: "flex", flexWrap: "wrap", gap: 18, justifyContent: "center" }}>
             {CRITERIA.map((t, i) => {
-              const s = spring({ frame: f - c2 - i * 2, fps: 30, config: { damping: 11, stiffness: 200 } });
+              const s = spring({ frame: f - c3 - i * 2, fps: 30, config: { damping: 11, stiffness: 200 } });
               return (
                 <div key={t} style={{ fontFamily, fontWeight: 900, fontSize: 42, color: BLUE, background: "#fff", border: `4px solid ${BLUE}`, borderRadius: 999, padding: "10px 28px", transform: `scale(${s})` }}>
                   {t}
@@ -736,8 +829,8 @@ const Research: React.FC<SceneProps> = ({ scene }) => {
             })}
           </div>
           {TOP3.map(([code, name, score], i) => {
-            const st = c2 + 22 + i * 8;
-            const grow = interpolate(f, [st, st + 26], [0, 1], { ...clamp, easing: (t) => 1 - Math.pow(1 - t, 3) });
+            const st = c3 + 8 + i * 5;
+            const grow = interpolate(f, [st, st + 20], [0, 1], { ...clamp, easing: (t) => 1 - Math.pow(1 - t, 3) });
             const s = spring({ frame: f - st + 4, fps: 30, config: { damping: 13 } });
             return (
               <div
