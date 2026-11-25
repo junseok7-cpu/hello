@@ -275,6 +275,71 @@ const Mountain: React.FC<{ start: number; per: number; highlight?: number; gathe
   );
 };
 
+
+// ---------------------------------------------------------------- opening: a messy heap of names (1.5x chips)
+const rnd = (i: number, k: number) => {
+  const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
+const HEAP_H = 66;
+const HEAP = (() => {
+  // drop each chip at a random x; it lands on whatever is already there (height map), slightly sinking in
+  const hm = new Array(140).fill(1990); // 10px columns, x from -100 to 1300
+  return companies.all.map((n, i) => {
+    const w = chipW(n) * 1.5;
+    const cx = 540 + (rnd(i, 1) + rnd(i, 2) + rnd(i, 3) - 1.5) * 800;
+    const x = Math.max(-80, Math.min(1160 - w, cx - w / 2));
+    const a = Math.floor((x + 100) / 10);
+    const b = Math.ceil((x + w + 100) / 10);
+    let top = Infinity;
+    for (let k = a; k < b; k++) top = Math.min(top, hm[k]);
+    const y = top - HEAP_H + 16 * (0.6 + 0.8 * rnd(i, 4));
+    for (let k = a; k < b; k++) hm[k] = Math.min(hm[k], y + HEAP_H * 0.25);
+    return { n, x, y, w, rot: ((i * 47) % 36) - 18, spin: rnd(i, 5) > 0.5 ? 1 : -1 };
+  });
+})();
+
+const Heap: React.FC<{ start: number; per: number; wobble?: number }> = ({ start, per, wobble = 0 }) => {
+  const f = useCurrentFrame();
+  return (
+    <>
+      {HEAP.map((c, i) => {
+        const s = spring({ frame: f - start - i * per, fps: 30, config: { damping: 9, stiffness: 200, mass: 0.6 } });
+        if (s < 0.001) return null;
+        const wob = wobble * Math.sin(f / 4 + i * 1.7) * 8;
+        return (
+          <div
+            key={c.n}
+            style={{
+              position: "absolute",
+              left: c.x + wob,
+              top: c.y - (1 - s) * 1700,
+              width: c.w,
+              height: HEAP_H,
+              borderRadius: 18,
+              background: "#fff",
+              border: "4px solid #94A3B8",
+              color: NAVY,
+              fontFamily,
+              fontWeight: 900,
+              fontSize: 40,
+              letterSpacing: -0.5,
+              whiteSpace: "nowrap",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 8px 18px rgba(23,35,59,0.22)",
+              transform: `rotate(${c.rot + (1 - s) * 70 * c.spin + wob * 0.5}deg)`,
+            }}
+          >
+            {c.n}
+          </div>
+        );
+      })}
+    </>
+  );
+};
+
 // ---------------------------------------------------------------- phone with real screenshots
 const SHOT_W = 860; // screenshots are 430px @2x
 const SHOT_H = 1864;
@@ -461,8 +526,8 @@ const Hook: React.FC<SceneProps> = ({ scene, dur }) => {
             열린 탭 {tabs}개
           </div>
         )}
-        {/* company names stacking up from the bottom like a mountain */}
-        <Mountain start={c1 - 2} per={(c3 - c1 - 6) / PILE.length} wobble={chaos} />
+        {/* company names piling up from the bottom like a heap of trash */}
+        <Heap start={c1 - 2} per={(c3 - c1 - 6) / HEAP.length} wobble={chaos} />
         {/* research notes piling up */}
         {RESEARCH_NOTES.map((n, i) => {
           const d = c2 + i * 3.5;
