@@ -186,31 +186,21 @@ const Tile: React.FC<{ c: readonly [string, string, string]; w?: number; style?:
 // ---------------------------------------------------------------- mountain of company names (from the team's list)
 const chipW = (n: string) => 34 + [...n].reduce((w, ch) => w + (/[가-힣]/.test(ch) ? 28 : ch === " " ? 8 : /[A-Z&]/.test(ch) ? 19 : 16), 0);
 const PICKED: string[] = companies.picked;
+const CELL_W = 236;
+const CELL_GAP = 9;
 const PILE = (() => {
-  // spread the picked companies through the pile with a fixed shuffle
-  const names = companies.all.map((n, i) => ({ n, k: (i * 29 + 7) % companies.all.length })).sort((a, b) => a.k - b.k).map((x) => x.n);
-  const out: { n: string; x: number; y: number; w: number }[] = [];
-  let row: { n: string; w: number }[] = [];
-  let r = 0;
-  const flush = () => {
-    const total = row.reduce((a, c) => a + c.w, 0) + (row.length - 1) * 8;
-    let x = 540 - total / 2 + (r % 2 ? 10 : -10);
-    for (const c of row) {
-      out.push({ n: c.n, x, y: 1400 - (r + 1) * 52, w: c.w });
-      x += c.w + 8;
-    }
-    row = [];
-    r++;
-  };
-  for (const n of names) {
-    const w = chipW(n);
-    const max = Math.max(200, 1070 - r * 42);
-    const cur = row.reduce((a, c) => a + c.w + 8, 0);
-    if (row.length && cur + w > max) flush();
-    row.push({ n, w });
-  }
-  if (row.length) flush();
-  return out;
+  // tidy grid: 4 columns, 가나다 order, equal-size boxes
+  const names = [...companies.all].sort((a, b) => a.localeCompare(b, "ko"));
+  const cols = 4;
+  const left = (1080 - cols * CELL_W - (cols - 1) * CELL_GAP) / 2;
+  return names.map((n, i) => ({
+    n,
+    x: left + (i % cols) * (CELL_W + CELL_GAP),
+    y: 400 + Math.floor(i / cols) * 58,
+    w: CELL_W,
+    fs: Math.min(27, (27 * (CELL_W - 22)) / (chipW(n) - 34)),
+    i,
+  }));
 })();
 
 /** grid slot centers of the 10-company tiles (Research scene) */
@@ -233,7 +223,7 @@ const Mountain: React.FC<{ start: number; per: number; highlight?: number; gathe
         const picked = pi >= 0;
         const h = picked ? highlight : 0;
         let x = c.x;
-        let y = c.y - (1 - s) * 1500;
+        let y = c.y + (1 - s) * 30;
         if (picked && gather > 0) {
           const [gx, gy] = gridCenter(pi);
           x = x + (gx - c.w / 2 - x) * gather;
@@ -248,21 +238,21 @@ const Mountain: React.FC<{ start: number; per: number; highlight?: number; gathe
               left: x + wob,
               top: y,
               width: c.w,
-              height: 44,
+              height: 48,
               borderRadius: 12,
               background: h > 0.5 ? BLUE : "#fff",
               border: `3px solid ${h > 0.5 ? BLUE : "#CBD5E1"}`,
               color: h > 0.5 ? "#fff" : NAVY,
               fontFamily,
               fontWeight: 900,
-              fontSize: 27,
+              fontSize: c.fs,
               letterSpacing: -0.5,
               whiteSpace: "nowrap",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               boxShadow: h > 0.5 ? "0 12px 30px rgba(37,99,235,0.45)" : "0 6px 14px rgba(23,35,59,0.12)",
-              opacity: picked ? 1 - gather * 0.0 : 1 - 0.85 * highlight,
+              opacity: Math.min(1, s) * (picked ? 1 : 1 - 0.85 * highlight),
               transform: `scale(${1 + 0.22 * h * (1 - gather)}) rotate(${wob * 0.4}deg)`,
               zIndex: picked ? 2 : 1,
             }}
