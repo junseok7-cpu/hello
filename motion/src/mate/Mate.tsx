@@ -50,7 +50,7 @@ const COMPANIES = [
 ] as const;
 
 // ================================================================ shared pieces
-const Caption: React.FC<{ scene: Scene; hide?: number[] }> = ({ scene, hide = [] }) => {
+const Caption: React.FC<{ scene: Scene; hide?: number[]; top?: number }> = ({ scene, hide = [], top = 1468 }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const caps = scene.captions;
@@ -59,7 +59,7 @@ const Caption: React.FC<{ scene: Scene; hide?: number[] }> = ({ scene, hide = []
   const c = caps[i];
   const s = spring({ frame: f - c.from, fps, config: { damping: 15, stiffness: 240 } });
   return (
-    <div style={{ position: "absolute", top: 1468, width: "100%", display: "flex", justifyContent: "center" }}>
+    <div style={{ position: "absolute", top, width: "100%", display: "flex", justifyContent: "center", zIndex: 10 }}>
       <div
         style={{
           fontFamily,
@@ -271,19 +271,20 @@ const rnd = (i: number, k: number) => {
   const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453;
   return x - Math.floor(x);
 };
-const HEAP_H = 66;
+const HEAP_SCALE = 1.8;
+const HEAP_H = 44 * HEAP_SCALE;
 const HEAP = (() => {
   // drop each chip at a random x; it lands on whatever is already there (height map), slightly sinking in
   const hm = new Array(140).fill(1990); // 10px columns, x from -100 to 1300
   return companies.all.map((n, i) => {
-    const w = chipW(n) * 1.5;
+    const w = chipW(n) * HEAP_SCALE;
     const cx = 540 + (rnd(i, 1) + rnd(i, 2) + rnd(i, 3) - 1.5) * 800;
     const x = Math.max(-80, Math.min(1160 - w, cx - w / 2));
     const a = Math.floor((x + 100) / 10);
     const b = Math.ceil((x + w + 100) / 10);
     let top = Infinity;
     for (let k = a; k < b; k++) top = Math.min(top, hm[k]);
-    const y = top - HEAP_H + 16 * (0.6 + 0.8 * rnd(i, 4));
+    const y = top - HEAP_H + 16 * (HEAP_SCALE / 1.5) * (0.6 + 0.8 * rnd(i, 4));
     for (let k = a; k < b; k++) hm[k] = Math.min(hm[k], y + HEAP_H * 0.25);
     return { n, x, y, w, rot: ((i * 47) % 36) - 18, spin: rnd(i, 5) > 0.5 ? 1 : -1 };
   });
@@ -306,13 +307,13 @@ const Heap: React.FC<{ start: number; per: number; wobble?: number }> = ({ start
               top: c.y - (1 - s) * 1700,
               width: c.w,
               height: HEAP_H,
-              borderRadius: 18,
+              borderRadius: 22,
               background: "#fff",
               border: "4px solid #94A3B8",
               color: NAVY,
               fontFamily,
               fontWeight: 900,
-              fontSize: 40,
+              fontSize: 27 * HEAP_SCALE,
               letterSpacing: -0.5,
               whiteSpace: "nowrap",
               display: "flex",
@@ -523,7 +524,7 @@ const Hook: React.FC<SceneProps> = ({ scene, dur }) => {
           const d = c2 + i * 3.5;
           const s = spring({ frame: f - d, fps: 30, config: { damping: 12, stiffness: 150 } });
           const tx = i % 2 ? 730 + ((i * 37) % 70) : 40 + ((i * 53) % 60);
-          const ty = 470 + Math.floor(i / 2) * 120 + ((i * 29) % 30);
+          const ty = 570 + Math.floor(i / 2) * 100 + ((i * 29) % 24);
           const rot = ((i * 71) % 30) - 15;
           const wob = chaos * Math.cos(f / 3.5 + i * 2) * 18;
           return (
@@ -558,7 +559,7 @@ const Hook: React.FC<SceneProps> = ({ scene, dur }) => {
           style={{
             position: "absolute",
             width: "100%",
-            top: 520,
+            top: 600,
             textAlign: "center",
             fontFamily,
             fontWeight: 900,
@@ -571,7 +572,7 @@ const Hook: React.FC<SceneProps> = ({ scene, dur }) => {
           ?
         </div>
       )}
-      <Caption scene={scene} />
+      <Caption scene={scene} top={430} />
     </AbsoluteFill>
   );
 };
