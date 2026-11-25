@@ -292,7 +292,16 @@ const HEAP = (() => {
   const TOP = 1050;
   const minY = Math.min(...raw.map((c) => c.y));
   const maxY = Math.max(...raw.map((c) => c.y));
-  return raw.map((c) => ({ ...c, y: TOP + ((c.y - minY) * (maxY - TOP)) / (maxY - minY) }));
+  // nudge a few chips from the crowded upper-left into the gap above 인터지스
+  const SCATTER: Record<string, [number, number]> = {
+    티맥스소프트: [-30, 1355],
+    파나시아: [255, 1385],
+    오리엔탈정공: [70, 1428],
+  };
+  return raw.map((c) => {
+    const to = SCATTER[c.n];
+    return to ? { ...c, x: to[0], y: to[1] } : { ...c, y: TOP + ((c.y - minY) * (maxY - TOP)) / (maxY - minY) };
+  });
 })();
 
 const Heap: React.FC<{ start: number; per: number; wobble?: number }> = ({ start, per, wobble = 0 }) => {
