@@ -276,7 +276,7 @@ const HEAP_H = 44 * HEAP_SCALE;
 const HEAP = (() => {
   // drop each chip at a random x; it lands on whatever is already there (height map), slightly sinking in
   const hm = new Array(140).fill(1990); // 10px columns, x from -100 to 1300
-  return companies.all.map((n, i) => {
+  const raw = companies.all.map((n, i) => {
     const w = chipW(n) * HEAP_SCALE;
     const cx = 540 + (rnd(i, 1) + rnd(i, 2) + rnd(i, 3) - 1.5) * 800;
     const x = Math.max(-80, Math.min(1160 - w, cx - w / 2));
@@ -288,6 +288,11 @@ const HEAP = (() => {
     for (let k = a; k < b; k++) hm[k] = Math.min(hm[k], y + HEAP_H * 0.25);
     return { n, x, y, w, rot: ((i * 47) % 36) - 18, spin: rnd(i, 5) > 0.5 ? 1 : -1 };
   });
+  // squash the heap so it stays below the research notes (their bottom edge is ~y 980)
+  const TOP = 1050;
+  const minY = Math.min(...raw.map((c) => c.y));
+  const maxY = Math.max(...raw.map((c) => c.y));
+  return raw.map((c) => ({ ...c, y: TOP + ((c.y - minY) * (maxY - TOP)) / (maxY - minY) }));
 })();
 
 const Heap: React.FC<{ start: number; per: number; wobble?: number }> = ({ start, per, wobble = 0 }) => {
