@@ -3,7 +3,8 @@ const fs = require('fs'), path = require('path');
 const pptxgen = require('pptxgenjs');
 const React = require('react'), RDS = require('react-dom/server'), sharp = require('sharp');
 const fa = require('react-icons/fa');
-const { applyTheme } = require(process.env.SKILL + '/scripts/apply_theme.js');
+let applyTheme = async () => {};                     // pptx 스킬이 없는 환경(Antigravity 등)에서는 테마 적용만 건너뜀
+try { if (process.env.SKILL) applyTheme = require(process.env.SKILL + '/scripts/apply_theme.js').applyTheme; } catch (e) { console.warn('apply_theme 없음 — 기본 테마로 저장'); }
 
 const E = process.argv[2];
 const R = JSON.parse(fs.readFileSync(path.join(E, 'results/results.json'), 'utf8'));
@@ -266,6 +267,35 @@ const CH = { catAxisLabelColor: HX.ink, valAxisLabelColor: HX.muted, catAxisLabe
   img(s, 'f10_nuclear.png', 5.1, 1.15, 4.4);
   TX(s, `한빛 5호기 연간 이용률 2021년 ${f1(NU.hanbit5['2021'])}%, 2023년 ${f1(NU.hanbit5['2023'])}%. 운영 원전 ${NU.operating_units}기 중 ${NU.expire_by_2030.length}기가 2030년까지 설계수명 만료 → 상태 감시 수요 증가`, { x: 5.1, y: 3.3, w: 4.4, h: 1.0, fontSize: 12, color: '3C4A55' });
   s.addNotes(`화력은 하루 전력수요와의 상관이 LNG ${FO.corr.LNG}, 석탄 ${FO.corr['석탄']}으로, LNG가 수요를 따라가는 추종 역할을 합니다. 원자력은 한빛 5호기의 이용률이 크게 떨어진 해들이 보이고, 2030년까지 ${NU.expire_by_2030.length}기가 설계수명을 맞기 때문에 상태 감시의 필요성이 커집니다.`);
+
+  // 15-1 LNG 일별 예측 (analyze_extra.py 결과가 있을 때만)
+  const LP = R.lng_pred;
+  if (LP) {
+    const M = LP.models, kU = '선형회귀 · 관측 수요 입력(상한선)', kR = '선형회귀 · 전날 수요만 입력(현실 조건)', kP = '어제 값(Persistence)';
+    s = pres.addSlide({ masterName: 'CONTENT', sectionTitle: '이상탐지와 추종' });
+    s.addText('LNG 발전량은 하루 단위로 예측할 수 있다', { placeholder: 'title' });
+    img(s, 'f11_lng_pred.png', 0.5, 1.05, 6.0);
+    s.addChart(pres.charts.BAR, [{ name: 'nRMSE', labels: ['어제 값', '전날 수요만', '당일 관측 수요'], values: [M[kP].nRMSE, M[kR].nRMSE, M[kU].nRMSE] }],
+      { x: 6.7, y: 1.05, w: 2.9, h: 2.4, barDir: 'bar', chartColors: [HX.muted, HX.amber, HX.teal], showValue: true, dataLabelPosition: 'outEnd', dataLabelFormatCode: '0.0"%"',
+        title: `nRMSE (${LP.test}년 시험, 선형회귀)`, ...CH });
+    TX(s, `당일 관측 수요를 넣으면 Skill ${M[kU].Skill.toFixed(2)} — 실제 수요를 알고 푼 상한선. 전날 수요만 쓰면 Skill ${M[kR].Skill.toFixed(2)}`, { x: 6.7, y: 3.55, w: 2.9, h: 1.1, fontSize: 11, color: '3C4A55' });
+    TX(s, `학습 ${LP.train} · 시험 ${LP.test} (${LP.test_days}일) · nRMSE는 일평균 LNG ${f1(LP.test_mean_GWh)} GWh 대비`, { x: 0.5, y: 4.7, w: 6, h: 0.3, fontSize: 10.5, italic: true, color: C.accent4 });
+    s.addNotes(`LNG 발전량을 하루 단위로 예측했습니다. 기준은 어제 값을 그대로 쓰는 방법입니다. 당일 실제 전력수요를 넣으면 오차가 어제 값보다 ${(M[kU].Skill * 100).toFixed(0)}% 줄지만, 이것은 수요를 미리 안다고 가정한 상한선입니다. 전날 수요만 쓰는 현실 조건에서는 ${(M[kR].Skill * 100).toFixed(0)}% 줄었습니다.`);
+  }
+  // 15-2 풍력·소수력 이상 후보 알림
+  const WH = R.wind_hydro;
+  if (WH) {
+    s = pres.addSlide({ masterName: 'CONTENT', sectionTitle: '이상탐지와 추종' });
+    s.addText('같은 규칙도 발전원마다 다르게 작동한다', { placeholder: 'title' });
+    img(s, 'f12_wind_hydro.png', 0.5, 1.05, 6.0);
+    TX(s, [{ text: '연료전지 규칙(28일 중앙값 대비 3σ + 15%p 하락)을 풍력·소수력에 그대로 적용', options: { breakLine: true } },
+      { text: ' ', options: { breakLine: true } },
+      { text: '풍력: 평소 이용률이 10% 안팎이라 15%p 하락이 거의 불가능 → 0건은 "이상 없음"이 아니라 규칙이 맞지 않는다는 뜻', options: { bullet: true, breakLine: true } },
+      { text: '소수력: 비가 적은 시기에 출력이 줄어 알림 일부는 갈수기일 수 있음', options: { bullet: true } }],
+      { x: 6.7, y: 1.1, w: 2.9, h: 3.4, fontSize: 11, color: '3C4A55' });
+    TX(s, '이상 후보 알림 — 정비 기록과 대조하지 않음', { x: 0.5, y: 4.7, w: 6, h: 0.3, fontSize: 10.5, italic: true, color: C.accent4 });
+    s.addNotes('연료전지에 쓴 규칙을 풍력과 소수력에도 적용해 봤습니다. 풍력은 평소 이용률이 10% 안팎이라 15%포인트 하락이라는 조건이 거의 성립하지 않아 알림이 없었습니다. 이건 이상이 없다는 뜻이 아니라 발전원마다 맞는 규칙이 다르다는 뜻입니다. 소수력은 강수의 영향을 함께 봐야 합니다.');
+  }
 
   // 16 결론
   pres.addSection({ title: '결론' });
