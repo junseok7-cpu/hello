@@ -1,5 +1,6 @@
 """공공데이터포털(data.go.kr)에서 원 데이터를 내려받아 data/ 에 UTF-8로 저장한다.
-실행: python fetch_data.py   (로그인 불필요, 약 1분)
+실행: python fetch_data.py   (기본 9종, 로그인 불필요, 약 1분)
+      python fetch_data.py --public   (추가 16종 → data/public/, analyze_public.py용)
 - supply_daily_2025.csv 는 포털에 파일이 없고 전력거래소 EPSIS 링크만 있어 받지 않는다(analyze.py가 이전 값을 유지).
 - 포털 파일은 기관이 갱신하면 내용이 바뀔 수 있다. 2026-11-28에 받은 파일로 기존 결과가 그대로 재현됨을 확인했다.
 """
@@ -16,6 +17,19 @@ FILES = {  # 저장 이름: (공공데이터포털 번호, 데이터 이름)
     'nuclear_annual_cf_2014_2025.csv': (15002302, '한국수력원자력_원자력발전소 호기별 발전량 및 이용률'),
     'nuclear_annual_gen_2019_2025.csv': (15046077, '원자력안전위원회_국내원전 호기별 발전량'),
     'nuclear_units_2025.csv': (15046076, '원자력안전위원회_국내 원자력발전소 현황'),
+}
+
+PUBLIC = {  # 추가 자료(analyze_public.py): 원본 그대로 data/public/<번호>.csv|zip 로 저장
+    15126707: '한국수목원정원관리원_국립세종수목원 지열 이용량', 15157241: '기후에너지환경부_신재생에너지 생산량',
+    15149953: '한국지역난방공사_연도별 공급자별 외부 수열량', 15123991: '한국지역난방공사_시간대별 수열량 정보',
+    15150813: '한국동서발전_바이오매스 연료분석결과',
+    15114951: '한국수력원자력_원전 호기별 계획예방정비 현황', 15060801: '한국수력원자력_가동원전 호기별 계획예방정비 계획',
+    15074543: '한국원자력안전기술원_연도별 원전 사고고장 현황', 15061937: '한국수력원자력_보고대상사건 현황',
+    15069337: '한국전력거래소_신재생 발전량 및 설비용량',
+    15132422: '한국전력거래소_전국 태양광 풍력 제어횟수 및 제주 풍력 제어량',
+    15152008: '한국전력거래소_육지 제주 통합 월별 계통한계가격', 15153657: '한국전력거래소_연료원별 일별 설비용량',
+    15086290: '한국에너지공단_신재생에너지 연도별 신규보급 현황', 15140231: '한국중부발전_발전소별 예방정비실적 정보',
+    15136947: '한국서부발전_설비 신뢰성 데이터',
 }
 
 def get(url, data=None, tries=5):
@@ -47,6 +61,13 @@ def to_text(b):
     raise RuntimeError('인코딩을 알 수 없음')
 
 if __name__ == '__main__':
+    import sys
+    if '--public' in sys.argv:                           # python fetch_data.py --public
+        os.makedirs('data/public', exist_ok=True)
+        for pk, name in PUBLIC.items():
+            b = download(pk); ext = 'zip' if b[:2] == b'PK' else 'csv'
+            open(f'data/public/{pk}.{ext}', 'wb').write(b); print(f'{pk}.{ext:4s} ← {name} ({len(b):,} bytes)')
+        sys.exit()
     os.makedirs('data', exist_ok=True)
     for out, (pk, name) in FILES.items():
         t = to_text(download(pk))

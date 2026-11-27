@@ -297,6 +297,45 @@ const CH = { catAxisLabelColor: HX.ink, valAxisLabelColor: HX.muted, catAxisLabe
     s.addNotes('연료전지에 쓴 규칙과 평소의 절반 이상 떨어진 날을 잡는 비율 규칙을 풍력과 소수력에 적용했습니다. 제주상명풍력은 두 규칙 모두 0건이었는데, 이상이 없다는 뜻이 아니라 바람 때문에 매일 크게 출렁여 발전량만으로는 가려내기 어렵다는 뜻입니다. 소수력은 강수·유량 기록과 대조해야 갈수기와 설비 문제를 구분할 수 있습니다.');
   }
 
+  // 공공데이터 추가 자료 (analyze_public.py 결과가 있을 때만)
+  const PB = R.public;
+  if (PB && PB.renewables_2025 && PB.nuclear_outage && PB.geothermal) {
+    pres.addSection({ title: '공공데이터로 더 확인한 것' });
+    const RS = PB.renewables_2025.by_source, NO = PB.nuclear_outage, GE = PB.geothermal, HS = PB.heat_sources;
+    s = pres.addSlide({ masterName: 'CONTENT', sectionTitle: '공공데이터로 더 확인한 것' });
+    s.addText('"출력을 누가 정하나" 2025년 실적으로 확인', { placeholder: 'title' });
+    img(s, 'f16_source_variability.png', 0.5, 1.05, 5.8);
+    TX(s, [{ text: '어제 같은 시각 값으로 예측할 때 오차', options: { bold: true, breakLine: true } },
+      { text: `연료전지 ${f1(RS['연료전지'].dayahead_persistence_nRMSE)}% · 소수력 ${f1(RS['소수력'].dayahead_persistence_nRMSE)}% · 바이오매스 ${f1(RS['바이오매스'].dayahead_persistence_nRMSE)}%`, options: { breakLine: true } },
+      { text: `태양광 ${f1(RS['태양광'].dayahead_persistence_nRMSE)}% · 풍력 ${f1(RS['풍력'].dayahead_persistence_nRMSE)}%`, options: { breakLine: true } },
+      { text: ' ', options: { breakLine: true } },
+      { text: '설비가 출력을 정하는 발전원은 어제 값으로도 거의 맞고, 날씨가 정하는 발전원은 AI 예측이 필요하다 → 발전원마다 AI 역할을 다르게 설계한 근거', options: {} }],
+      { x: 6.5, y: 1.1, w: 3.1, h: 3.4, fontSize: 11.5, color: '3C4A55' });
+    TX(s, '자료: 한국전력거래소_신재생 발전량 및 설비용량(2025, 시간별). 태양광은 밤 시간 포함', { x: 0.5, y: 4.75, w: 6, h: 0.3, fontSize: 9.5, italic: true, color: C.accent4 });
+    s.addNotes(`전력거래소의 2025년 시간별 신재생 실적으로 다시 확인했습니다. 어제 같은 시각 값을 그대로 쓸 때 오차가 연료전지는 ${f1(RS['연료전지'].dayahead_persistence_nRMSE)}%, 풍력은 ${f1(RS['풍력'].dayahead_persistence_nRMSE)}%입니다. 출력을 설비가 정하는지 날씨가 정하는지에 따라 AI가 할 일이 달라진다는 저희 설계의 근거입니다.`);
+
+    s = pres.addSlide({ masterName: 'CONTENT', sectionTitle: '공공데이터로 더 확인한 것' });
+    s.addText('원전 이용률이 낮은 해는 정비가 길었던 해', { placeholder: 'title' });
+    img(s, 'f15_nuclear_outage.png', 0.5, 1.05, 5.8);
+    TX(s, [{ text: `상관계수 ${NO.corr_outage_days_vs_cf.toFixed(2)}`, options: { bold: true, fontSize: 22, color: HX.red, breakLine: true } },
+      { text: `이용률 50% 미만 ${NO.low_cf_cases}건의 평균 정비 일수 ${f1(NO.low_cf_mean_outage_days)}일 (나머지 ${f1(NO.others_mean_outage_days)}일)`, options: { breakLine: true } },
+      { text: `한빛 5호기: 2020년 ${NO.hanbit5['2020'].outage_days}일, 2021년 ${NO.hanbit5['2021'].outage_days}일, 2023년 ${NO.hanbit5['2023'].outage_days}일 정비`, options: { breakLine: true } },
+      { text: ' ', options: { breakLine: true } },
+      { text: '원전은 출력 예측보다 "정비 기간을 줄이는 것"이 AI의 몫 → 상태 기반 정비', options: { bold: true } }],
+      { x: 6.5, y: 1.1, w: 3.1, h: 3.4, fontSize: 11.5, color: '3C4A55' });
+    TX(s, '자료: 한국수력원자력_원전 호기별 계획예방정비 현황, 호기별 발전량 및 이용률', { x: 0.5, y: 4.75, w: 6, h: 0.3, fontSize: 9.5, italic: true, color: C.accent4 });
+    s.addNotes(`한수원의 계획예방정비 기록을 이용률과 맞춰 보니 상관계수가 ${NO.corr_outage_days_vs_cf.toFixed(2)}였습니다. 한빛 5호기의 이용률이 낮았던 해는 정비가 거의 1년 가까이 이어진 해였습니다. 원전에서 AI의 역할은 출력 예측이 아니라 정비 기간과 시점을 줄이는 상태 기반 정비입니다.`);
+
+    s = pres.addSlide({ masterName: 'CONTENT', sectionTitle: '공공데이터로 더 확인한 것' });
+    s.addText('지열도 "평소와 다른 날"을 잡을 수 있다', { placeholder: 'title' });
+    img(s, 'f13_geothermal.png', 0.5, 1.05, 9.0);
+    const ad = Object.values(GE.cop_drop_alert_days).reduce((a, v) => a + v, 0), jd = Object.values(GE.judged_days).reduce((a, v) => a + v, 0);
+    TX(s, `국립세종수목원 지열 히트펌프 ${GE.buildings.length}개 건물 (${GE.period}) · 운전 중 효율(COP) 중앙값 ${GE.cop_median} · 평소(28일 중앙값)보다 효율이 30% 이상 낮은 날 ${ad}일 / 판정 ${jd}일 — 이상 후보 알림. 지열 생산량은 2015년 대비 ${HS.growth_2015_2024['지열']}배, 수열은 ${HS.growth_2015_2024['수열']}배`,
+      { x: 0.5, y: 4.15, w: 9.0, h: 0.6, fontSize: 11, color: '3C4A55' });
+    TX(s, '자료: 한국수목원정원관리원_국립세종수목원 지열 이용량, 기후에너지환경부_신재생에너지 생산량', { x: 0.5, y: 4.8, w: 9, h: 0.3, fontSize: 9.5, italic: true, color: C.accent4 });
+    s.addNotes('지열은 발전소 데이터가 없었지만, 국립세종수목원 지열 히트펌프의 시간별 운전 기록을 찾았습니다. 생산 열량을 소비 전력으로 나눈 효율을 매일 계산하고, 평소보다 30% 이상 떨어진 날을 이상 후보로 표시했습니다. 연료전지와 같은 방법을 지열에도 쓸 수 있다는 것을 보여 줍니다.');
+  }
+
   // 16 결론
   pres.addSection({ title: '결론' });
   s = pres.addSlide({ masterName: 'CONTENT', sectionTitle: '결론' });
