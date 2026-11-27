@@ -1,0 +1,135 @@
+lng_pred {
+ "어제 값(Persistence)": {
+  "MAE_GWh": 61.79,
+  "RMSE_GWh": 81.94,
+  "nMAE": 13.8,
+  "nRMSE": 18.3,
+  "Skill": 0.0
+ },
+ "전주 같은 요일 값": {
+  "MAE_GWh": 53.79,
+  "RMSE_GWh": 76.45,
+  "nMAE": 12.02,
+  "nRMSE": 17.08,
+  "Skill": 0.067
+ },
+ "선형회귀 · 수요 없음(달력+과거 LNG)": {
+  "MAE_GWh": 32.64,
+  "RMSE_GWh": 43.98,
+  "nMAE": 7.29,
+  "nRMSE": 9.83,
+  "Skill": 0.463
+ },
+ "GBDT · 수요 없음(달력+과거 LNG)": {
+  "MAE_GWh": 39.78,
+  "RMSE_GWh": 53.69,
+  "nMAE": 8.89,
+  "nRMSE": 11.99,
+  "Skill": 0.345
+ },
+ "선형회귀 · 관측 수요 입력(사후 참고)": {
+  "MAE_GWh": 33.33,
+  "RMSE_GWh": 41.49,
+  "nMAE": 7.45,
+  "nRMSE": 9.27,
+  "Skill": 0.494
+ },
+ "GBDT · 관측 수요 입력(사후 참고)": {
+  "MAE_GWh": 36.31,
+  "RMSE_GWh": 45.29,
+  "nMAE": 8.11,
+  "nRMSE": 10.12,
+  "Skill": 0.447
+ },
+ "선형회귀 · 전날 수요만 입력(현실 조건)": {
+  "MAE_GWh": 33.21,
+  "RMSE_GWh": 44.31,
+  "nMAE": 7.42,
+  "nRMSE": 9.9,
+  "Skill": 0.459
+ },
+ "GBDT · 전날 수요만 입력(현실 조건)": {
+  "MAE_GWh": 40.23,
+  "RMSE_GWh": 54.08,
+  "nMAE": 8.99,
+  "nRMSE": 12.08,
+  "Skill": 0.34
+ }
+}
+findfont: Failed to find font weight normal for WenQuanYi Zen Hei, now using 500.
+findfont: Failed to find font weight normal for WenQuanYi Zen Hei, now using 500.
+findfont: Failed to find font weight normal for WenQuanYi Zen Hei, now using 500.
+wind_hydro {
+ "보령화력소수력#1": {
+  "type": "소수력",
+  "days": 1024,
+  "missing_days": 11,
+  "judgeable": true,
+  "cf_median": 0.168,
+  "alerts": 3,
+  "events": 3,
+  "alerts_rel": 30,
+  "events_rel": 14,
+  "zero_days": 13,
+  "longest_zero_streak": 7
+ },
+ "보령화력소수력#2": {
+  "type": "소수력",
+  "days": 1027,
+  "missing_days": 8,
+  "judgeable": true,
+  "cf_median": 0.219,
+  "alerts": 58,
+  "events": 14,
+  "alerts_rel": 72,
+  "events_rel": 16,
+  "zero_days": 118,
+  "longest_zero_streak": 58
+ },
+ "신보령소수력": {
+  "type": "소수력",
+  "days": 1033,
+  "missing_days": 2,
+  "judgeable": true,
+  "cf_median": 0.306,
+  "alerts": 14,
+  "events": 9,
+  "alerts_rel": 12,
+  "events_rel": 8,
+  "zero_days": 89,
+  "longest_zero_streak": 18
+ },
+ "신서천화력소수력": {
+  "type": "소수력",
+  "days": 648,
+  "missing_days": 355,
+  "judgeable": true,
+  "cf_median": 0.0,
+  "alerts": 10,
+  "events": 2,
+  "alerts_rel": 12,
+  "events_rel": 3,
+  "zero_days": 421,
+  "longest_zero_streak": 238
+ },
+ "양양풍력#1": {
+  "type": "풍력",
+  "days": 1,
+  "judgeable": false,
+  "note": "관측 30일 미만 — 판정 불가"
+ },
+ "제주상명풍력": {
+  "type": "풍력",
+  "days": 1034,
+  "missing_days": 1,
+  "judgeable": true,
+  "cf_median": 0.103,
+  "alerts": 0,
+  "events": 0,
+  "alerts_rel": 0,
+  "events_rel": 0,
+  "zero_days": 23,
+  "longest_zero_streak": 2
+ }
+}
+wrote results/results.json + figures f11, f12

@@ -213,6 +213,132 @@
   "raw_width": 12.15,
   "cal_width": 12.99
  },
+ "solar_issue_14": {
+  "issue": "목표일 전날 14:00 발행 가정(시각은 KST로 가정). 관측 기상·lag24 미사용",
+  "features": [
+   "hour_sin",
+   "hour_cos",
+   "doy_sin",
+   "doy_cos",
+   "region",
+   "extra",
+   "lag48",
+   "lag168"
+  ],
+  "test_rows": 69924,
+  "test_dates": 347,
+  "lag48_baseline": {
+   "nMAE": 12.02,
+   "nRMSE": 17.89,
+   "bias": 0.0
+  },
+  "lightgbm": {
+   "nMAE": 10.46,
+   "nRMSE": 13.75,
+   "bias": 0.63,
+   "Skill_vs_lag48": 0.231
+  },
+  "observed_weather_reference": {
+   "nMAE": 4.3,
+   "nRMSE": 6.2,
+   "bias": 0.11,
+   "Skill_vs_lag48": 0.653
+  }
+ },
+ "solar_interval_issue_14": {
+  "target_coverage_pct": 80,
+  "early_stop": "2023-01~06",
+  "calibration": "2023-07~12",
+  "n_calibration": 37034,
+  "qhat_cf": 0.0105,
+  "raw_crossings_test": 0,
+  "raw": {
+   "n": 69924,
+   "coverage_pct": 76.19,
+   "mean_width_pp": 31.27,
+   "interval_score_pp": 37.89
+  },
+  "calibrated": {
+   "n": 69924,
+   "coverage_pct": 83.65,
+   "mean_width_pp": 33.36,
+   "interval_score_pp": 37.89
+  },
+  "by_month": {
+   "1": {
+    "n": 5090,
+    "coverage_pct": 79.33,
+    "mean_width_pp": 30.18,
+    "interval_score_pp": 34.83
+   },
+   "2": {
+    "n": 4590,
+    "coverage_pct": 75.77,
+    "mean_width_pp": 37.15,
+    "interval_score_pp": 43.41
+   },
+   "3": {
+    "n": 5328,
+    "coverage_pct": 80.46,
+    "mean_width_pp": 38.53,
+    "interval_score_pp": 44.57
+   },
+   "4": {
+    "n": 4894,
+    "coverage_pct": 83.88,
+    "mean_width_pp": 38.73,
+    "interval_score_pp": 42.39
+   },
+   "5": {
+    "n": 5866,
+    "coverage_pct": 81.42,
+    "mean_width_pp": 37.41,
+    "interval_score_pp": 42.99
+   },
+   "6": {
+    "n": 7140,
+    "coverage_pct": 82.44,
+    "mean_width_pp": 33.98,
+    "interval_score_pp": 39.42
+   },
+   "7": {
+    "n": 7378,
+    "coverage_pct": 84.41,
+    "mean_width_pp": 31.22,
+    "interval_score_pp": 35.33
+   },
+   "8": {
+    "n": 7222,
+    "coverage_pct": 88.63,
+    "mean_width_pp": 31.05,
+    "interval_score_pp": 35.08
+   },
+   "9": {
+    "n": 6120,
+    "coverage_pct": 86.63,
+    "mean_width_pp": 33.61,
+    "interval_score_pp": 37.74
+   },
+   "10": {
+    "n": 5926,
+    "coverage_pct": 83.88,
+    "mean_width_pp": 33.25,
+    "interval_score_pp": 37.08
+   },
+   "11": {
+    "n": 5100,
+    "coverage_pct": 84.9,
+    "mean_width_pp": 30.05,
+    "interval_score_pp": 34.56
+   },
+   "12": {
+    "n": 5270,
+    "coverage_pct": 89.01,
+    "mean_width_pp": 26.83,
+    "interval_score_pp": 29.14
+   }
+  }
+ },
  "region": [
   {
    "region": "전남",
@@ -573,6 +699,92 @@
    "events": 8
   }
  },
+ "fuelcell_cusum": {
+  "rule": "처음 90달력일(유효 60일 이상) 중앙값·MAD 고정, 하방 CUSUM k=0.5, h=4, 척도 하한 0.02. 결측일은 누적을 끊음",
+  "plants": {
+   "서울연료전지": {
+    "judgeable": true,
+    "baseline_end": "2024-01-29",
+    "baseline_cf": 0.843,
+    "scale_cf": 0.0341,
+    "monitored_days": 945,
+    "missing_days": 0,
+    "first_alert_date": "2024-02-25",
+    "cusum_alert_days": 140,
+    "cusum_events": 2,
+    "both_alert_days": 3,
+    "first_starts": [
+     "2024-02-25",
+     "2024-08-08"
+    ]
+   },
+   "세종연료전지": {
+    "judgeable": true,
+    "baseline_end": "2024-01-29",
+    "baseline_cf": 0.88,
+    "scale_cf": 0.0403,
+    "monitored_days": 945,
+    "missing_days": 0,
+    "first_alert_date": "2024-07-01",
+    "cusum_alert_days": 792,
+    "cusum_events": 1,
+    "both_alert_days": 31,
+    "first_starts": [
+     "2024-07-01"
+    ]
+   },
+   "신보령연료전지": {
+    "judgeable": true,
+    "baseline_end": "2024-01-29",
+    "baseline_cf": 0.871,
+    "scale_cf": 0.02,
+    "monitored_days": 945,
+    "missing_days": 0,
+    "first_alert_date": "2024-02-15",
+    "cusum_alert_days": 926,
+    "cusum_events": 2,
+    "both_alert_days": 43,
+    "first_starts": [
+     "2024-02-15",
+     "2024-03-18"
+    ]
+   },
+   "인천 연료전지 2단계": {
+    "judgeable": true,
+    "baseline_end": "2024-01-29",
+    "baseline_cf": 0.984,
+    "scale_cf": 0.02,
+    "monitored_days": 945,
+    "missing_days": 0,
+    "first_alert_date": "2024-02-14",
+    "cusum_alert_days": 930,
+    "cusum_events": 1,
+    "both_alert_days": 17,
+    "first_starts": [
+     "2024-02-14"
+    ]
+   },
+   "인천연료전지": {
+    "judgeable": true,
+    "baseline_end": "2024-01-29",
+    "baseline_cf": 0.896,
+    "scale_cf": 0.0244,
+    "monitored_days": 945,
+    "missing_days": 0,
+    "first_alert_date": "2024-02-14",
+    "cusum_alert_days": 715,
+    "cusum_events": 7,
+    "both_alert_days": 12,
+    "first_starts": [
+     "2024-02-14",
+     "2024-04-02",
+     "2024-06-14",
+     "2024-09-19",
+     "2025-02-04"
+    ]
+   }
+  }
+ },
  "solar_peer": {
   "events": 272,
   "groups": {
@@ -829,11 +1041,156 @@
    "10": 73.2,
    "11": 76.2,
    "12": 82.8
-  }
+  },
+  "note": "supply_daily_2025.csv 없음 — 이전 실행 값 유지"
  },
  "fig_days": {
   "good": "2024-10-11",
   "worst": "2024-04-16"
  },
- "fig_fuelcell": "세종연료전지"
+ "fig_fuelcell": "세종연료전지",
+ "lng_pred": {
+  "train": "2018~2020",
+  "test": "2021",
+  "test_days": 365,
+  "test_mean_GWh": 447.7,
+  "missing_days": 0,
+  "note": "Skill = 1 - RMSE/RMSE(어제 값). nMAE·nRMSE는 2021년 일평균 LNG 발전량 대비 %.",
+  "models": {
+   "어제 값(Persistence)": {
+    "MAE_GWh": 61.79,
+    "RMSE_GWh": 81.94,
+    "nMAE": 13.8,
+    "nRMSE": 18.3,
+    "Skill": 0.0
+   },
+   "전주 같은 요일 값": {
+    "MAE_GWh": 53.79,
+    "RMSE_GWh": 76.45,
+    "nMAE": 12.02,
+    "nRMSE": 17.08,
+    "Skill": 0.067
+   },
+   "선형회귀 · 수요 없음(달력+과거 LNG)": {
+    "MAE_GWh": 32.64,
+    "RMSE_GWh": 43.98,
+    "nMAE": 7.29,
+    "nRMSE": 9.83,
+    "Skill": 0.463
+   },
+   "GBDT · 수요 없음(달력+과거 LNG)": {
+    "MAE_GWh": 39.78,
+    "RMSE_GWh": 53.69,
+    "nMAE": 8.89,
+    "nRMSE": 11.99,
+    "Skill": 0.345
+   },
+   "선형회귀 · 관측 수요 입력(사후 참고)": {
+    "MAE_GWh": 33.33,
+    "RMSE_GWh": 41.49,
+    "nMAE": 7.45,
+    "nRMSE": 9.27,
+    "Skill": 0.494
+   },
+   "GBDT · 관측 수요 입력(사후 참고)": {
+    "MAE_GWh": 36.31,
+    "RMSE_GWh": 45.29,
+    "nMAE": 8.11,
+    "nRMSE": 10.12,
+    "Skill": 0.447
+   },
+   "선형회귀 · 전날 수요만 입력(현실 조건)": {
+    "MAE_GWh": 33.21,
+    "RMSE_GWh": 44.31,
+    "nMAE": 7.42,
+    "nRMSE": 9.9,
+    "Skill": 0.459
+   },
+   "GBDT · 전날 수요만 입력(현실 조건)": {
+    "MAE_GWh": 40.23,
+    "RMSE_GWh": 54.08,
+    "nMAE": 8.99,
+    "nRMSE": 12.08,
+    "Skill": 0.34
+   }
+  },
+  "caution": "당일 관측 수요 조건은 수요가 하루가 끝나야 확정되므로 사후 참고 실험이다. 전날 수요 조건은 전날 수요·LNG 집계가 예측 발행 시각까지 확보된다고 가정한다. 시험은 2021년 한 해뿐이다."
+ },
+ "wind_hydro": {
+  "rule": "alerts/events: 과거 28일 중앙값 대비 3σ(MAD) 이탈 + 설비용량 15%p 이상 하락(연료전지와 같은 규칙). alerts_rel/events_rel: 3σ 이탈 + 기준 대비 50% 이상 하락(기준 이용률 3% 이상). alerts는 일수, events는 구간 수. 날짜는 달력 기준.",
+  "caution": "풍력은 평소 이용률이 10% 안팎이라 15%p 하락 조건이 거의 성립하지 않는다. 0건은 \"이상 없음\"이 아니라 이 규칙이 풍력에 맞지 않는다는 뜻이다. 소수력은 강수에 따라 출력이 크게 바뀌어 알림 일부는 가뭄·갈수기일 수 있다.",
+  "plants": {
+   "보령화력소수력#1": {
+    "type": "소수력",
+    "days": 1024,
+    "missing_days": 11,
+    "judgeable": true,
+    "cf_median": 0.168,
+    "alerts": 3,
+    "events": 3,
+    "alerts_rel": 30,
+    "events_rel": 14,
+    "zero_days": 13,
+    "longest_zero_streak": 7
+   },
+   "보령화력소수력#2": {
+    "type": "소수력",
+    "days": 1027,
+    "missing_days": 8,
+    "judgeable": true,
+    "cf_median": 0.219,
+    "alerts": 58,
+    "events": 14,
+    "alerts_rel": 72,
+    "events_rel": 16,
+    "zero_days": 118,
+    "longest_zero_streak": 58
+   },
+   "신보령소수력": {
+    "type": "소수력",
+    "days": 1033,
+    "missing_days": 2,
+    "judgeable": true,
+    "cf_median": 0.306,
+    "alerts": 14,
+    "events": 9,
+    "alerts_rel": 12,
+    "events_rel": 8,
+    "zero_days": 89,
+    "longest_zero_streak": 18
+   },
+   "신서천화력소수력": {
+    "type": "소수력",
+    "days": 648,
+    "missing_days": 355,
+    "judgeable": true,
+    "cf_median": 0.0,
+    "alerts": 10,
+    "events": 2,
+    "alerts_rel": 12,
+    "events_rel": 3,
+    "zero_days": 421,
+    "longest_zero_streak": 238
+   },
+   "양양풍력#1": {
+    "type": "풍력",
+    "days": 1,
+    "judgeable": false,
+    "note": "관측 30일 미만 — 판정 불가"
+   },
+   "제주상명풍력": {
+    "type": "풍력",
+    "days": 1034,
+    "missing_days": 1,
+    "judgeable": true,
+    "cf_median": 0.103,
+    "alerts": 0,
+    "events": 0,
+    "alerts_rel": 0,
+    "events_rel": 0,
+    "zero_days": 23,
+    "longest_zero_streak": 2
+   }
+  }
+ }
 }

@@ -305,14 +305,20 @@ nu = pd.read_csv(D + 'nuclear_units_2025.csv')
 op = nu[nu['구분'] == '운영원전'].copy(); op['exp'] = pd.to_datetime(op['설계수명만료일'], errors='coerce')
 R['nuclear']['expire_by_2030'] = op[op.exp <= '2030-12-31'][['발전소명', '호기', '설계수명만료일']].values.tolist()
 R['nuclear']['operating_units'] = int(len(op))
-sp = pd.read_csv(D + 'supply_daily_2025.csv'); sp.columns = [c.strip() for c in sp.columns]
-sp = sp.rename(columns={sp.columns[2]: 'supply_cap', sp.columns[3]: 'peak', sp.columns[5]: 'reserve', sp.columns[6]: 'rate'})  # 열 이름 한 칸 밀림 보정
-sp['d'] = pd.to_datetime(sp.iloc[:, 0]); sp['wk'] = sp.d.dt.dayofweek >= 5
-R['supply2025'] = dict(identity_max_err_MW=float((sp.supply_cap - sp.peak - sp.reserve).abs().max()),
-                       peak_max=float(sp.peak.max()), peak_day=str(sp.loc[sp.peak.idxmax(), 'd'].date()),
-                       rate_min=float(sp.rate.min()), rate_min_day=str(sp.loc[sp.rate.idxmin(), 'd'].date()),
-                       rate_weekday=round(float(sp[~sp.wk].rate.mean()), 1), rate_weekend=round(float(sp[sp.wk].rate.mean()), 1),
-                       monthly_peak=(sp.groupby(sp.d.dt.month).peak.max()/1000).round(1).to_dict())
+import os
+if os.path.exists(D + 'supply_daily_2025.csv'):
+    sp = pd.read_csv(D + 'supply_daily_2025.csv'); sp.columns = [c.strip() for c in sp.columns]
+    sp = sp.rename(columns={sp.columns[2]: 'supply_cap', sp.columns[3]: 'peak', sp.columns[5]: 'reserve', sp.columns[6]: 'rate'})  # 열 이름 한 칸 밀림 보정
+    sp['d'] = pd.to_datetime(sp.iloc[:, 0]); sp['wk'] = sp.d.dt.dayofweek >= 5
+    R['supply2025'] = dict(identity_max_err_MW=float((sp.supply_cap - sp.peak - sp.reserve).abs().max()),
+                           peak_max=float(sp.peak.max()), peak_day=str(sp.loc[sp.peak.idxmax(), 'd'].date()),
+                           rate_min=float(sp.rate.min()), rate_min_day=str(sp.loc[sp.rate.idxmin(), 'd'].date()),
+                           rate_weekday=round(float(sp[~sp.wk].rate.mean()), 1), rate_weekend=round(float(sp[sp.wk].rate.mean()), 1),
+                           monthly_peak=(sp.groupby(sp.d.dt.month).peak.max()/1000).round(1).to_dict())
+else:   # 공공데이터포털에 파일이 없고 EPSIS 링크만 있음 → 이전 확정값 유지
+    OLD = json.load(open('results/results.json', encoding='utf-8')) if os.path.exists('results/results.json') else {}
+    R['supply2025'] = dict(OLD.get('supply2025', {}), note='supply_daily_2025.csv 없음 — 이전 실행 값 유지')
+    log('supply2025: 파일 없음, 이전 값 유지')
 log('nuclear/supply done')
 json.dump(R, open('results/results.json', 'w'), ensure_ascii=False, indent=1, default=str)
 
