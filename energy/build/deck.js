@@ -370,23 +370,24 @@ const CH = { catAxisLabelColor: HX.ink, valAxisLabelColor: HX.muted, catAxisLabe
   TX(s, '할 수 있는 것', { x: 1.3, y: 1.35, w: 3.4, h: 0.4, fontSize: 16, bold: true, valign: 'middle' });
   TX(s, [{ text: `태양광 예측 오차 ${(A.LightGBM.Skill * 100).toFixed(0)}% 감소 (기준선 대비)`, options: { bullet: true, breakLine: true } },
     { text: '불확실성을 범위(P10~P90)로 알려줌', options: { bullet: true, breakLine: true } },
-    { text: '설비 증설에도 흔들리지 않는 학습', options: { bullet: true, breakLine: true } },
-    { text: '고장·출력 저하 신호를 일찍 포착', options: { bullet: true } }], { x: 0.7, y: 1.95, w: 4.0, h: 2.1, fontSize: 13, paraSpaceAfter: 6 });
+    { text: 'LNG 하루 단위 예측 (어제 값 대비 오차 46% 감소)', options: { bullet: true, breakLine: true } },
+    { text: '연료전지·풍력 호기·지열·바이오의 "평소와 다른 날" 알림', options: { bullet: true, breakLine: true } },
+    { text: '원전은 정비 기간 관리 (정비 일수–이용률 상관 -0.91)', options: { bullet: true } }], { x: 0.7, y: 1.95, w: 4.0, h: 2.1, fontSize: 13, paraSpaceAfter: 6 });
   card(s, 5.1, 1.15, 4.4, 3.0, 'FBECEA', 'cannot');
   await iconDot(s, fa.FaTimes, 5.3, 1.32, 0.45, HX.red);
   TX(s, '할 수 없는 것 · 남은 한계', { x: 5.9, y: 1.35, w: 3.5, h: 0.4, fontSize: 16, bold: true, valign: 'middle' });
   TX(s, [{ text: '카르노·베츠·쇼클리–퀘이서 한계', options: { bullet: true, breakLine: true } },
     { text: '실험 날씨가 관측값 → 실제 성능은 더 낮음', options: { bullet: true, breakLine: true } },
-    { text: '시도 합계·계량 설비(29%)만 학습', options: { bullet: true, breakLine: true } },
+    { text: '전날 예측 조건이면 오차 6.2% → 13.8% (예보 품질이 관건)', options: { bullet: true, breakLine: true } },
     { text: '이상 알림을 정비 기록과 대조 못 함', options: { bullet: true } }], { x: 5.3, y: 1.95, w: 4.0, h: 2.1, fontSize: 13, paraSpaceAfter: 6 });
-  TX(s, '다음 단계: 과거 기상 예보로 실제 성능 측정 · ESS 분리 · 발전소 단위 확장 · 오차의 비용 환산', { x: 0.5, y: 4.4, w: 9, h: 0.5, fontSize: 12.5, color: C.accent1, bold: true });
+  TX(s, '다음 단계: 과거 기상 예보로 실제 성능 측정 · 풍속 예보 + 출력 곡선 · 정비 기록으로 알림 검증 · 오차의 비용 환산', { x: 0.5, y: 4.4, w: 9, h: 0.5, fontSize: 12.5, color: C.accent1, bold: true });
   s.addNotes('정리하겠습니다. AI는 물리 법칙의 한계를 넘지 못합니다. 하지만 이미 있는 설비가 언제, 얼마나 전기를 만들지 미리 알려주고, 고장 신호를 일찍 잡아 설비를 더 짓지 않고도 손실을 줄일 수 있습니다. 실험 날씨가 관측값이라는 한계가 있어, 다음 단계로 과거 기상 예보로 실제 성능을 재 보는 것을 제안합니다.');
 
   // 17 마무리
   s = pres.addSlide({ masterName: 'DARK', sectionTitle: '결론' });
   s.addText('설비를 더 짓기 전에, 이미 있는 설비를 더 잘 알자', { placeholder: 'title' });
   TX(s, '감사합니다 · 질문 받겠습니다', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: 'CFE3E1' });
-  TX(s, '데이터: 공공데이터포털 — 시도별 시간별 태양광 학습데이터(2020~2024), 공식 태양광 예측(2024.12.2), 한국중부발전 설비별 일별 발전량, 시간별 전력수요, 연료원별 화력 발전량, 원전 호기별 발전량·이용률, 2025 전력수급   ·   코드: energy/analyze.py',
+  TX(s, '데이터: 공공데이터포털(data.go.kr) 파일데이터 50종 — 한국동서발전·한국중부발전·한국남부발전·한국서부발전·한국남동발전·한국수력원자력·한국전력거래소·원자력안전위원회 등 (목록: energy/report/데이터목록.md)   ·   코드: energy/analyze*.py',
     { x: 0.6, y: 4.3, w: 8.8, h: 0.8, fontSize: 10, color: 'A9C9C6' });
   s.addNotes('발표를 마치겠습니다. 감사합니다.');
 

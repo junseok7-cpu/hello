@@ -95,7 +95,7 @@ GPT 웹 조사(`handoff/gpt_datasets3.md`, 검색 374회) 25개를 모두 받았
 |---|---|---|---|
 | 1 | 원 데이터 받기·재실행·결과 커밋 | Claude | ✅ 완료(2026-11-28) |
 | 2 | 대본 수치 채우기, pptx 재생성(24장, 공공데이터 5장 포함) | Claude | ✅ 완료 |
-| 3 | 보고서(report.js)에 LNG·풍력/소수력·발행 시각 기준 절 추가, docx 재생성 | Claude 또는 Antigravity | 남음 |
+| 3 | 보고서(report.js)에 LNG·풍력/소수력·발행 시각 기준·공공데이터 50종 반영, docx 재생성(26쪽) | Claude | ✅ 완료 |
 | 4 | 미리캔버스 30쪽에 LNG 1쪽(파트②), 풍력·소수력 1쪽(파트③) 추가, 목차 파트④ "코드 구현" | Claude(미리캔버스 연결) 또는 팀 | 남음 |
 | 5 | Gemini가 로컬에 만든 파일(index.html 등)이 있으면 `handoff/gemini_local/`로 push | Antigravity | 선택 |
 | 6 | index.html 대시보드: 쓸지 결정. 쓰면 수치를 results.json에서 읽게 | 팀 결정 → Antigravity | 선택 |
