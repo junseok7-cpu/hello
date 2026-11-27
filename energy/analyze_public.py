@@ -222,5 +222,11 @@ for name, fn in [('geothermal', geothermal), ('heat_sources', heat_sources), ('b
     step(name, fn)
 PUB['sources'] = SRC
 R['public'] = PUB
-json.dump(R, open(RJ, 'w', encoding='utf-8'), ensure_ascii=False, indent=1, default=str)
+def clean(o):                                                      # NaN·inf는 JSON 표준이 아니라 null로 저장(브라우저·Node에서 읽히게)
+    if isinstance(o, dict): return {str(k): clean(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)): return [clean(v) for v in o]
+    if isinstance(o, float) and not np.isfinite(o): return None
+    if isinstance(o, np.generic): return clean(o.item())
+    return o
+json.dump(clean(R), open(RJ, 'w', encoding='utf-8'), ensure_ascii=False, indent=1, default=str, allow_nan=False)
 print('wrote public:', [k for k in PUB if k != 'sources'], '| 자료', len(SRC), '종')

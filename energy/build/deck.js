@@ -336,6 +336,31 @@ const CH = { catAxisLabelColor: HX.ink, valAxisLabelColor: HX.muted, catAxisLabe
     s.addNotes('지열은 발전소 데이터가 없었지만, 국립세종수목원 지열 히트펌프의 시간별 운전 기록을 찾았습니다. 생산 열량을 소비 전력으로 나눈 효율을 매일 계산하고, 평소보다 30% 이상 떨어진 날을 이상 후보로 표시했습니다. 연료전지와 같은 방법을 지열에도 쓸 수 있다는 것을 보여 줍니다.');
   }
 
+  // 공공데이터 2차 (analyze_public2.py 결과가 있을 때만)
+  const P2 = R.public2;
+  if (P2 && P2.wind_scada && P2.khnp_solar) {
+    const WS = P2.wind_scada, JH = WS['장흥풍력'], HS2 = WS['화순풍력'], KS = P2.khnp_solar;
+    s = pres.addSlide({ masterName: 'CONTENT', sectionTitle: '공공데이터로 더 확인한 것' });
+    s.addText('풍력은 풍속 데이터가 있어야 알 수 있다', { placeholder: 'title' });
+    img(s, 'f19_wind_scada.png', 0.5, 1.05, 9.0);
+    const su = HS2.stopped_by_unit, top = Object.entries(su).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k + '호기').join('·');
+    TX(s, `장흥풍력: 어제 값 ${f1(JH.nRMSE_persistence_24h)}% → 실제 풍속 + 출력 곡선 ${f1(JH.nRMSE_curve_with_actual_wind)}% (풍속 예보가 좋을수록 이 쪽에 가까워짐). 화순풍력: 바람이 충분한데(5~12 m/s) 출력 0인 시간이 ${top}에 몰림 → 같은 단지 호기끼리 비교하면 "평소와 다른 호기"가 보인다`,
+      { x: 0.5, y: 4.15, w: 9.0, h: 0.6, fontSize: 11, color: '3C4A55' });
+    TX(s, '자료: 한국서부발전_(AI친화)장흥·화순풍력발전소 스카다 발전 정보. 출력 0의 원인(정지·출력제어)은 기록과 대조 필요', { x: 0.5, y: 4.8, w: 9, h: 0.3, fontSize: 9.5, italic: true, color: C.accent4 });
+    s.addNotes(`풍력은 발전량만으로는 평소와 다른 날을 가려낼 수 없었습니다. 그래서 풍속과 출력이 함께 있는 서부발전 풍력발전소 운전 기록을 찾았습니다. 실제 풍속을 알면 장흥풍력의 오차가 ${f1(JH.nRMSE_persistence_24h)}%에서 ${f1(JH.nRMSE_curve_with_actual_wind)}%로 줄고, 화순풍력은 바람이 충분한데도 멈춰 있던 시간이 특정 호기에 몰려 있었습니다.`);
+
+    s = pres.addSlide({ masterName: 'CONTENT', sectionTitle: '공공데이터로 더 확인한 것' });
+    s.addText('발전소 54곳에서도 같은 결론', { placeholder: 'title' });
+    img(s, 'f21_khnp_solar.png', 0.5, 1.05, 5.8);
+    TX(s, [{ text: `한수원 태양광 ${KS.plants}곳, 2025년 낮 시간`, options: { bold: true, breakLine: true } },
+      { text: `어제 값 ${f1(KS.nRMSE.persistence)}% → 예보 항목 ${f1(KS.nRMSE['예보 항목(기온·습도·풍속·강수)'])}% → 실측 일사까지 ${f1(KS.nRMSE['+ 실측 일조·일사'])}%`, options: { breakLine: true } },
+      { text: ' ', options: { breakLine: true } },
+      { text: '시도 합계(오차가 서로 상쇄됨)보다 발전소 하나는 더 어렵지만, 날씨 정보가 오차를 줄이는 순서는 같다', options: {} }],
+      { x: 6.5, y: 1.1, w: 3.1, h: 3.4, fontSize: 11.5, color: '3C4A55' });
+    TX(s, '자료: 한국수력원자력_기상정보를 융합한 한수원 태양광 시계열 발전정보(2023~2025). 기상은 인근 관측값', { x: 0.5, y: 4.75, w: 6, h: 0.3, fontSize: 9.5, italic: true, color: C.accent4 });
+    s.addNotes(`시도 단위로 만든 방법이 발전소 하나하나에도 통하는지 한수원 태양광 ${KS.plants}곳의 시간별 자료로 확인했습니다. 발전소 단위는 오차가 서로 상쇄되지 않아 더 어렵지만, 날씨 정보를 넣을수록 오차가 줄어드는 순서는 같았습니다.`);
+  }
+
   // 16 결론
   pres.addSection({ title: '결론' });
   s = pres.addSlide({ masterName: 'CONTENT', sectionTitle: '결론' });
