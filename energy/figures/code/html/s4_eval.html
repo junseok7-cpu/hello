@@ -1,0 +1,102 @@
+<html><head><meta charset='utf-8'><style>
+body{margin:0;background:#e9efe6;font-family:'WenQuanYi Zen Hei',sans-serif}
+.win{position:absolute;left:24px;top:24px;right:24px;bottom:24px;background:#22272e;border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.bar{height:52px;background:#1b1f24;display:flex;align-items:center;padding:0 18px;gap:10px}
+.dot{width:14px;height:14px;border-radius:7px}.tab{margin-left:22px;background:#22272e;color:#e6edf3;padding:14px 22px;font-size:20px;border-radius:8px 8px 0 0;font-family:'DejaVu Sans Mono','WenQuanYi Zen Hei Mono',monospace}
+.ttl{margin-left:auto;color:#7ee787;font-size:22px;font-weight:bold}
+.code{padding:18px 0;font-family:'DejaVu Sans Mono','WenQuanYi Zen Hei Mono',monospace;font-size:25px;line-height:1.5;color:#e6edf3}
+.ln{display:flex;align-items:flex-start;min-height:37px}
+.no{width:64px;text-align:right;color:#6e7681;padding-right:14px;flex:none}
+.mk{width:44px;flex:none;text-align:center}
+.mk span{display:inline-block;width:30px;height:30px;border-radius:15px;background:#3fb950;color:#0d1117;font-weight:bold;font-size:20px;line-height:30px;font-family:'WenQuanYi Zen Hei',sans-serif}
+.tx{white-space:pre-wrap;word-break:break-all;padding-right:24px;flex:1}
+.on{background:rgba(63,185,80,.16)}
+.gap{color:#6e7681;padding-left:122px}
+.hl{background:transparent}
+pre { line-height: 125%; }
+td.linenos .normal { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+span.linenos { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+td.linenos .special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+.hl .hll { background-color: #ffffcc }
+.hl { background: #282C34; color: #ABB2BF }
+.hl .c { color: #7F848E } /* Comment */
+.hl .err { color: #ABB2BF } /* Error */
+.hl .esc { color: #ABB2BF } /* Escape */
+.hl .g { color: #ABB2BF } /* Generic */
+.hl .k { color: #C678DD } /* Keyword */
+.hl .l { color: #ABB2BF } /* Literal */
+.hl .n { color: #E06C75 } /* Name */
+.hl .o { color: #56B6C2 } /* Operator */
+.hl .x { color: #ABB2BF } /* Other */
+.hl .p { color: #ABB2BF } /* Punctuation */
+.hl .ch { color: #7F848E } /* Comment.Hashbang */
+.hl .cm { color: #7F848E } /* Comment.Multiline */
+.hl .cp { color: #7F848E } /* Comment.Preproc */
+.hl .cpf { color: #7F848E } /* Comment.PreprocFile */
+.hl .c1 { color: #7F848E } /* Comment.Single */
+.hl .cs { color: #7F848E } /* Comment.Special */
+.hl .gd { color: #E06C75 } /* Generic.Deleted */
+.hl .ge { color: #ABB2BF; font-style: italic } /* Generic.Emph */
+.hl .ges { color: #ABB2BF } /* Generic.EmphStrong */
+.hl .gr { color: #E06C75 } /* Generic.Error */
+.hl .gh { color: #ABB2BF; font-weight: bold } /* Generic.Heading */
+.hl .gi { color: #98C379 } /* Generic.Inserted */
+.hl .go { color: #E06C75 } /* Generic.Output */
+.hl .gp { color: #ABB2BF } /* Generic.Prompt */
+.hl .gs { color: #ABB2BF; font-weight: bold } /* Generic.Strong */
+.hl .gu { color: #ABB2BF; font-weight: bold } /* Generic.Subheading */
+.hl .gt { color: #E06C75 } /* Generic.Traceback */
+.hl .kc { color: #E5C07B } /* Keyword.Constant */
+.hl .kd { color: #C678DD } /* Keyword.Declaration */
+.hl .kn { color: #C678DD } /* Keyword.Namespace */
+.hl .kp { color: #C678DD } /* Keyword.Pseudo */
+.hl .kr { color: #C678DD } /* Keyword.Reserved */
+.hl .kt { color: #E5C07B } /* Keyword.Type */
+.hl .ld { color: #ABB2BF } /* Literal.Date */
+.hl .m { color: #D19A66 } /* Literal.Number */
+.hl .s { color: #98C379 } /* Literal.String */
+.hl .na { color: #E06C75 } /* Name.Attribute */
+.hl .nb { color: #E5C07B } /* Name.Builtin */
+.hl .nc { color: #E5C07B } /* Name.Class */
+.hl .no { color: #E06C75 } /* Name.Constant */
+.hl .nd { color: #61AFEF } /* Name.Decorator */
+.hl .ni { color: #E06C75 } /* Name.Entity */
+.hl .ne { color: #E06C75 } /* Name.Exception */
+.hl .nf { color: #61AFEF; font-weight: bold } /* Name.Function */
+.hl .nl { color: #E06C75 } /* Name.Label */
+.hl .nn { color: #E06C75 } /* Name.Namespace */
+.hl .nx { color: #E06C75 } /* Name.Other */
+.hl .py { color: #E06C75 } /* Name.Property */
+.hl .nt { color: #E06C75 } /* Name.Tag */
+.hl .nv { color: #E06C75 } /* Name.Variable */
+.hl .ow { color: #56B6C2 } /* Operator.Word */
+.hl .pm { color: #ABB2BF } /* Punctuation.Marker */
+.hl .w { color: #ABB2BF } /* Text.Whitespace */
+.hl .mb { color: #D19A66 } /* Literal.Number.Bin */
+.hl .mf { color: #D19A66 } /* Literal.Number.Float */
+.hl .mh { color: #D19A66 } /* Literal.Number.Hex */
+.hl .mi { color: #D19A66 } /* Literal.Number.Integer */
+.hl .mo { color: #D19A66 } /* Literal.Number.Oct */
+.hl .sa { color: #98C379 } /* Literal.String.Affix */
+.hl .sb { color: #98C379 } /* Literal.String.Backtick */
+.hl .sc { color: #98C379 } /* Literal.String.Char */
+.hl .dl { color: #98C379 } /* Literal.String.Delimiter */
+.hl .sd { color: #98C379 } /* Literal.String.Doc */
+.hl .s2 { color: #98C379 } /* Literal.String.Double */
+.hl .se { color: #98C379 } /* Literal.String.Escape */
+.hl .sh { color: #98C379 } /* Literal.String.Heredoc */
+.hl .si { color: #98C379 } /* Literal.String.Interpol */
+.hl .sx { color: #98C379 } /* Literal.String.Other */
+.hl .sr { color: #98C379 } /* Literal.String.Regex */
+.hl .s1 { color: #98C379 } /* Literal.String.Single */
+.hl .ss { color: #98C379 } /* Literal.String.Symbol */
+.hl .bp { color: #E5C07B } /* Name.Builtin.Pseudo */
+.hl .fm { color: #56B6C2; font-weight: bold } /* Name.Function.Magic */
+.hl .vc { color: #E06C75 } /* Name.Variable.Class */
+.hl .vg { color: #E06C75 } /* Name.Variable.Global */
+.hl .vi { color: #E06C75 } /* Name.Variable.Instance */
+.hl .vm { color: #E06C75 } /* Name.Variable.Magic */
+.hl .il { color: #D19A66 } /* Literal.Number.Integer.Long */
+.hl .c1,.hl .c{color:#8b949e;font-style:normal}
+</style></head><body><div class='win'><div class='bar'><div class='dot' style='background:#ff5f56'></div><div class='dot' style='background:#ffbd2e'></div><div class='dot' style='background:#27c93f'></div><div class='tab'>energy/analyze.py</div><div class='ttl'>4단계 · 평가와 비교</div></div><div class='code'><div class='ln '><div class='no'>63</div><div class='mk'></div><div class='tx hl'><span class="k">def</span><span class="w"> </span><span class="nf">pred</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">cols</span><span class="p">):</span> <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">cols</span><span class="p">]),</span> <span class="n">index</span><span class="o">=</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span></div></div><div class='ln '><div class='no'>64</div><div class='mk'></div><div class='tx hl'><span class="n">EV</span> <span class="o">=</span> <span class="n">TE</span> <span class="o">&amp;</span> <span class="n">df</span><span class="o">.</span><span class="n">day</span> <span class="o">&amp;</span> <span class="n">df</span><span class="o">.</span><span class="n">cf</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">df</span><span class="o">.</span><span class="n">lag24</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span></div></div><div class='ln on'><div class='no'>65</div><div class='mk'><span>①</span></div><div class='tx hl'><span class="k">def</span><span class="w"> </span><span class="nf">metr</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="n">EV</span><span class="p">):</span></div></div><div class='ln '><div class='no'>66</div><div class='mk'></div><div class='tx hl'>    <span class="n">e</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">df</span><span class="o">.</span><span class="n">cf</span><span class="p">)[</span><span class="n">mask</span><span class="p">]</span></div></div><div class='ln '><div class='no'>67</div><div class='mk'></div><div class='tx hl'>    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">nMAE</span><span class="o">=</span><span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">*</span><span class="mi">100</span><span class="p">),</span> <span class="mi">2</span><span class="p">),</span> <span class="n">nRMSE</span><span class="o">=</span><span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="n">e</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span><span class="o">*</span><span class="mi">100</span><span class="p">),</span> <span class="mi">2</span><span class="p">),</span></div></div><div class='ln '><div class='no'>68</div><div class='mk'></div><div class='tx hl'>                <span class="n">bias</span><span class="o">=</span><span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">*</span><span class="mi">100</span><span class="p">),</span> <span class="mi">2</span><span class="p">))</span></div></div><div class='ln on'><div class='no'>69</div><div class='mk'><span>②</span></div><div class='tx hl'><span class="k">def</span><span class="w"> </span><span class="nf">skill</span><span class="p">(</span><span class="n">m</span><span class="p">):</span> <span class="k">return</span> <span class="nb">round</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">m</span><span class="p">[</span><span class="s1">'nRMSE'</span><span class="p">]</span> <span class="o">/</span> <span class="n">R</span><span class="p">[</span><span class="s1">'A'</span><span class="p">][</span><span class="s1">'Persistence'</span><span class="p">][</span><span class="s1">'nRMSE'</span><span class="p">],</span> <span class="mi">3</span><span class="p">)</span></div></div><div class='ln '><div class='no'>70</div><div class='mk'></div><div class='tx hl'></div></div><div class='ln '><div class='no'>71</div><div class='mk'></div><div class='tx hl'><span class="c1"># 실험 A — 모델별 성능</span></div></div><div class='ln '><div class='no'>72</div><div class='mk'></div><div class='tx hl'><span class="n">R</span><span class="p">[</span><span class="s1">'A'</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span></div></div><div class='ln on'><div class='no'>73</div><div class='mk'><span>③</span></div><div class='tx hl'><span class="n">R</span><span class="p">[</span><span class="s1">'A'</span><span class="p">][</span><span class="s1">'Persistence'</span><span class="p">]</span> <span class="o">=</span> <span class="n">metr</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">lag24</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span></div></div><div class='ln '><div class='no'>74</div><div class='mk'></div><div class='tx hl'><span class="n">X</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">MAIN_F</span><span class="p">]</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">TR</span><span class="p">,</span> <span class="n">MAIN_F</span><span class="p">]</span><span class="o">.</span><span class="n">median</span><span class="p">());</span> <span class="n">trm</span> <span class="o">=</span> <span class="n">TR</span> <span class="o">&amp;</span> <span class="n">df</span><span class="o">.</span><span class="n">day</span> <span class="o">&amp;</span> <span class="n">df</span><span class="o">.</span><span class="n">cf</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span></div></div><div class='ln on'><div class='no'>75</div><div class='mk'><span>④</span></div><div class='tx hl'><span class="n">lr</span> <span class="o">=</span> <span class="n">LinearRegression</span><span class="p">()</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">trm</span><span class="p">],</span> <span class="n">df</span><span class="o">.</span><span class="n">cf</span><span class="p">[</span><span class="n">trm</span><span class="p">])</span></div></div><div class='ln '><div class='no'>76</div><div class='mk'></div><div class='tx hl'><span class="n">R</span><span class="p">[</span><span class="s1">'A'</span><span class="p">][</span><span class="s1">'선형회귀'</span><span class="p">]</span> <span class="o">=</span> <span class="n">metr</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">lr</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="n">index</span><span class="o">=</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span></div></div><div class='ln '><div class='no'>77</div><div class='mk'></div><div class='tx hl'><span class="n">seeds</span> <span class="o">=</span> <span class="p">[]</span></div></div><div class='ln on'><div class='no'>78</div><div class='mk'><span>⑤</span></div><div class='tx hl'><span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span></div></div><div class='ln '><div class='no'>79</div><div class='mk'></div><div class='tx hl'>    <span class="n">m</span> <span class="o">=</span> <span class="n">fit</span><span class="p">(</span><span class="n">MAIN_F</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">s</span><span class="p">);</span> <span class="n">p</span> <span class="o">=</span> <span class="n">pred</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">MAIN_F</span><span class="p">)</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span> <span class="n">seeds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">metr</span><span class="p">(</span><span class="n">p</span><span class="p">))</span></div></div><div class='ln '><div class='no'>80</div><div class='mk'></div><div class='tx hl'>    <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="n">main_model</span><span class="p">,</span> <span class="n">df</span><span class="p">[</span><span class="s1">'p_main'</span><span class="p">]</span> <span class="o">=</span> <span class="n">m</span><span class="p">,</span> <span class="n">p</span></div></div><div class='ln '><div class='no'>81</div><div class='mk'></div><div class='tx hl'>    <span class="n">log</span><span class="p">(</span><span class="s1">'seed'</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">seeds</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="s1">'trees'</span><span class="p">,</span> <span class="n">m</span><span class="o">.</span><span class="n">best_iteration_</span><span class="p">)</span></div></div></div></div></body></html>

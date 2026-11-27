@@ -1,0 +1,39 @@
+[     2s] solar rows 806408 -> 739432
+/usr/local/lib/python3.13/site-packages/lightgbm/sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+[     7s] seed 0 {'nMAE': 4.12, 'nRMSE': 6.04, 'bias': 0.13} trees 185
+/usr/local/lib/python3.13/site-packages/lightgbm/sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+[    12s] seed 1 {'nMAE': 4.13, 'nRMSE': 6.06, 'bias': 0.16} trees 225
+/usr/local/lib/python3.13/site-packages/lightgbm/sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+[    17s] seed 2 {'nMAE': 4.14, 'nRMSE': 6.06, 'bias': 0.13} trees 170
+[    17s] A {'Persistence': {'nMAE': 9.76, 'nRMSE': 15.38, 'bias': -0.08, 'Skill': 0.0}, '선형회귀': {'nMAE': 6.98, 'nRMSE': 9.19, 'bias': 0.46, 'Skill': 0.402}, 'LightGBM': {'nMAE': 4.13, 'nRMSE': 6.05, 'bias': 0.14, 'nRMSE_std': 0.009, 'Skill': 0.607}}
+/usr/local/lib/python3.13/site-packages/lightgbm/sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+/usr/local/lib/python3.13/site-packages/lightgbm/sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+[    24s] B {'B0 기상 정보 없음': {'nMAE': 9.19, 'nRMSE': 12.77, 'bias': 0.61, 'Skill': 0.17}, 'B1 예보 항목(기온·습도·풍속·운량·강수)': {'nMAE': 4.12, 'nRMSE': 6.04, 'bias': 0.13, 'Skill': 0.607}, 'B2 + 실측 일사량·일조': {'nMAE': 3.8, 'nRMSE': 5.58, 'bias': 0.04, 'Skill': 0.637}}
+/usr/local/lib/python3.13/site-packages/lightgbm/sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+/usr/local/lib/python3.13/site-packages/lightgbm/sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+/usr/local/lib/python3.13/site-packages/lightgbm/sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+[    30s] C {'시간·지역': {'nMAE': 10.39, 'nRMSE': 13.83, 'bias': 0.92, 'Skill': 0.101}, '+ 천문(대기권밖 일사량)': {'nMAE': 10.16, 'nRMSE': 13.83, 'bias': 0.91, 'Skill': 0.101}, '+ 기상 예보 항목': {'nMAE': 4.59, 'nRMSE': 6.48, 'bias': 0.43, 'Skill': 0.579}, '+ 과거 발전량(lag)': {'nMAE': 4.12, 'nRMSE': 6.04, 'bias': 0.13, 'Skill': 0.607}}
+/usr/local/lib/python3.13/site-packages/lightgbm/sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+[    34s] D {'nMAE': 10.38, 'nRMSE': 14.37, 'bias': -7.93}
+/usr/local/lib/python3.13/site-packages/lightgbm/sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+/usr/local/lib/python3.13/site-packages/lightgbm/sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+[    48s] interval {'raw_coverage': 0.748, 'conformal_qhat': 0.0043, 'calibrated_coverage': 0.804, 'raw_width': 12.15, 'cal_width': 12.99}
+[    49s] kpx {'공식 하루 전 예측': {'nMAE': 6.44, 'nRMSE': 8.88}, '우리 모델(관측 기상 입력)': {'nMAE': 3.56, 'nRMSE': 4.93}, 'Persistence': {'nMAE': 5.4, 'nRMSE': 8.36}, 'n': 180}
+[    49s] anomaly {'서울연료전지': {'days': 1035, 'alerts': 3, 'alert_rate': 0.3, 'cf_median': 0.884, 'drops': 3, 'events': 3}, '세종연료전지': {'days': 1035, 'alerts': 38, 'alert_rate': 3.7, 'cf_median': 0.798, 'drops': 38, 'events': 12}, '신보령연료전지': {'days': 1035, 'alerts': 43, 'alert_rate': 4.2, 'cf_median': 0.792, 'drops': 43, 'events': 16}, '인천 연료전지 2단계': {'days': 1035, 'alerts': 17, 'alert_rate': 1.6, 'cf_median': 0.949, 'drops': 17, 'events': 12}, '인천연료전지': {'days': 1035, 'alerts': 14, 'alert_rate': 1.4, 'cf_median': 0.84, 'drops': 14, 'events': 8}} {'events': 272, 'groups': {'인천': 4, '전국': 6, '제주': 4, '충남': 12}, 'plants': 26, 'plant_days': 18295, 'alerts': 394, 'top': {'제주대태양광': 58, '여수엑스포태양광': 56, '제주화력 태양광발전': 56, '서울태양광#1': 47, '서천태양광': 32}}
+[    50s] follow {'period': '2018-01-01~2021-12-31', 'days': 1461, 'corr': {'LNG': 0.841, '석탄': 0.621, '유류': 0.488}, 'cv': {'LNG': 0.271, '석탄': 0.171, 'demand_GWh': 0.108}, 'mean_GWh': {'LNG': 402.0, '석탄': 563.5, '유류': 10.2, 'demand_GWh': 1451.0}}
+[    50s] nuclear/supply done
+findfont: Failed to find font weight normal for WenQuanYi Zen Hei, now using 500.
+findfont: Failed to find font weight normal for WenQuanYi Zen Hei, now using 500.
+findfont: Failed to find font weight normal for WenQuanYi Zen Hei, now using 500.
+[    52s] done

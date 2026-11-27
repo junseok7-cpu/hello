@@ -1,0 +1,102 @@
+<html><head><meta charset='utf-8'><style>
+body{margin:0;background:#e9efe6;font-family:'WenQuanYi Zen Hei',sans-serif}
+.win{position:absolute;left:24px;top:24px;right:24px;bottom:24px;background:#22272e;border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.bar{height:52px;background:#1b1f24;display:flex;align-items:center;padding:0 18px;gap:10px}
+.dot{width:14px;height:14px;border-radius:7px}.tab{margin-left:22px;background:#22272e;color:#e6edf3;padding:14px 22px;font-size:20px;border-radius:8px 8px 0 0;font-family:'DejaVu Sans Mono','WenQuanYi Zen Hei Mono',monospace}
+.ttl{margin-left:auto;color:#7ee787;font-size:22px;font-weight:bold}
+.code{padding:18px 0;font-family:'DejaVu Sans Mono','WenQuanYi Zen Hei Mono',monospace;font-size:25px;line-height:1.5;color:#e6edf3}
+.ln{display:flex;align-items:flex-start;min-height:37px}
+.no{width:64px;text-align:right;color:#6e7681;padding-right:14px;flex:none}
+.mk{width:44px;flex:none;text-align:center}
+.mk span{display:inline-block;width:30px;height:30px;border-radius:15px;background:#3fb950;color:#0d1117;font-weight:bold;font-size:20px;line-height:30px;font-family:'WenQuanYi Zen Hei',sans-serif}
+.tx{white-space:pre-wrap;word-break:break-all;padding-right:24px;flex:1}
+.on{background:rgba(63,185,80,.16)}
+.gap{color:#6e7681;padding-left:122px}
+.hl{background:transparent}
+pre { line-height: 125%; }
+td.linenos .normal { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+span.linenos { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+td.linenos .special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+.hl .hll { background-color: #ffffcc }
+.hl { background: #282C34; color: #ABB2BF }
+.hl .c { color: #7F848E } /* Comment */
+.hl .err { color: #ABB2BF } /* Error */
+.hl .esc { color: #ABB2BF } /* Escape */
+.hl .g { color: #ABB2BF } /* Generic */
+.hl .k { color: #C678DD } /* Keyword */
+.hl .l { color: #ABB2BF } /* Literal */
+.hl .n { color: #E06C75 } /* Name */
+.hl .o { color: #56B6C2 } /* Operator */
+.hl .x { color: #ABB2BF } /* Other */
+.hl .p { color: #ABB2BF } /* Punctuation */
+.hl .ch { color: #7F848E } /* Comment.Hashbang */
+.hl .cm { color: #7F848E } /* Comment.Multiline */
+.hl .cp { color: #7F848E } /* Comment.Preproc */
+.hl .cpf { color: #7F848E } /* Comment.PreprocFile */
+.hl .c1 { color: #7F848E } /* Comment.Single */
+.hl .cs { color: #7F848E } /* Comment.Special */
+.hl .gd { color: #E06C75 } /* Generic.Deleted */
+.hl .ge { color: #ABB2BF; font-style: italic } /* Generic.Emph */
+.hl .ges { color: #ABB2BF } /* Generic.EmphStrong */
+.hl .gr { color: #E06C75 } /* Generic.Error */
+.hl .gh { color: #ABB2BF; font-weight: bold } /* Generic.Heading */
+.hl .gi { color: #98C379 } /* Generic.Inserted */
+.hl .go { color: #E06C75 } /* Generic.Output */
+.hl .gp { color: #ABB2BF } /* Generic.Prompt */
+.hl .gs { color: #ABB2BF; font-weight: bold } /* Generic.Strong */
+.hl .gu { color: #ABB2BF; font-weight: bold } /* Generic.Subheading */
+.hl .gt { color: #E06C75 } /* Generic.Traceback */
+.hl .kc { color: #E5C07B } /* Keyword.Constant */
+.hl .kd { color: #C678DD } /* Keyword.Declaration */
+.hl .kn { color: #C678DD } /* Keyword.Namespace */
+.hl .kp { color: #C678DD } /* Keyword.Pseudo */
+.hl .kr { color: #C678DD } /* Keyword.Reserved */
+.hl .kt { color: #E5C07B } /* Keyword.Type */
+.hl .ld { color: #ABB2BF } /* Literal.Date */
+.hl .m { color: #D19A66 } /* Literal.Number */
+.hl .s { color: #98C379 } /* Literal.String */
+.hl .na { color: #E06C75 } /* Name.Attribute */
+.hl .nb { color: #E5C07B } /* Name.Builtin */
+.hl .nc { color: #E5C07B } /* Name.Class */
+.hl .no { color: #E06C75 } /* Name.Constant */
+.hl .nd { color: #61AFEF } /* Name.Decorator */
+.hl .ni { color: #E06C75 } /* Name.Entity */
+.hl .ne { color: #E06C75 } /* Name.Exception */
+.hl .nf { color: #61AFEF; font-weight: bold } /* Name.Function */
+.hl .nl { color: #E06C75 } /* Name.Label */
+.hl .nn { color: #E06C75 } /* Name.Namespace */
+.hl .nx { color: #E06C75 } /* Name.Other */
+.hl .py { color: #E06C75 } /* Name.Property */
+.hl .nt { color: #E06C75 } /* Name.Tag */
+.hl .nv { color: #E06C75 } /* Name.Variable */
+.hl .ow { color: #56B6C2 } /* Operator.Word */
+.hl .pm { color: #ABB2BF } /* Punctuation.Marker */
+.hl .w { color: #ABB2BF } /* Text.Whitespace */
+.hl .mb { color: #D19A66 } /* Literal.Number.Bin */
+.hl .mf { color: #D19A66 } /* Literal.Number.Float */
+.hl .mh { color: #D19A66 } /* Literal.Number.Hex */
+.hl .mi { color: #D19A66 } /* Literal.Number.Integer */
+.hl .mo { color: #D19A66 } /* Literal.Number.Oct */
+.hl .sa { color: #98C379 } /* Literal.String.Affix */
+.hl .sb { color: #98C379 } /* Literal.String.Backtick */
+.hl .sc { color: #98C379 } /* Literal.String.Char */
+.hl .dl { color: #98C379 } /* Literal.String.Delimiter */
+.hl .sd { color: #98C379 } /* Literal.String.Doc */
+.hl .s2 { color: #98C379 } /* Literal.String.Double */
+.hl .se { color: #98C379 } /* Literal.String.Escape */
+.hl .sh { color: #98C379 } /* Literal.String.Heredoc */
+.hl .si { color: #98C379 } /* Literal.String.Interpol */
+.hl .sx { color: #98C379 } /* Literal.String.Other */
+.hl .sr { color: #98C379 } /* Literal.String.Regex */
+.hl .s1 { color: #98C379 } /* Literal.String.Single */
+.hl .ss { color: #98C379 } /* Literal.String.Symbol */
+.hl .bp { color: #E5C07B } /* Name.Builtin.Pseudo */
+.hl .fm { color: #56B6C2; font-weight: bold } /* Name.Function.Magic */
+.hl .vc { color: #E06C75 } /* Name.Variable.Class */
+.hl .vg { color: #E06C75 } /* Name.Variable.Global */
+.hl .vi { color: #E06C75 } /* Name.Variable.Instance */
+.hl .vm { color: #E06C75 } /* Name.Variable.Magic */
+.hl .il { color: #D19A66 } /* Literal.Number.Integer.Long */
+.hl .c1,.hl .c{color:#8b949e;font-style:normal}
+</style></head><body><div class='win'><div class='bar'><div class='dot' style='background:#ff5f56'></div><div class='dot' style='background:#ffbd2e'></div><div class='dot' style='background:#27c93f'></div><div class='tab'>energy/analyze.py</div><div class='ttl'>5단계 · 이상탐지</div></div><div class='code'><div class='ln '><div class='no'>159</div><div class='mk'></div><div class='tx hl'><span class="n">bad</span> <span class="o">=</span> <span class="p">(</span><span class="n">k</span><span class="o">.</span><span class="n">d</span> <span class="o">&gt;=</span> <span class="s1">'2025-01-01'</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">k</span><span class="o">.</span><span class="n">d</span> <span class="o">&lt;=</span> <span class="s1">'2025-06-30'</span><span class="p">)</span></div></div><div class='ln on'><div class='no'>160</div><div class='mk'><span>①</span></div><div class='tx hl'><span class="n">k</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s1">'발전량'</span><span class="p">]</span> <span class="o">=</span> <span class="n">k</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s1">'발전량'</span><span class="p">]</span> <span class="o">/</span> <span class="mi">1000</span>                       <span class="c1"># 2025.1~6월 단위 1000배 오류 보정</span></div></div><div class='ln on'><div class='no'>161</div><div class='mk'><span>②</span></div><div class='tx hl'><span class="n">k</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">k</span><span class="p">[</span><span class="s1">'발전설비'</span><span class="p">]</span> <span class="o">==</span> <span class="s1">'인천연료전지'</span><span class="p">,</span> <span class="s1">'설비용량'</span><span class="p">]</span> <span class="o">=</span> <span class="mi">31680</span>                 <span class="c1"># 2026.3 이전 설비용량 절반 표기 보정</span></div></div><div class='ln '><div class='no'>162</div><div class='mk'></div><div class='tx hl'><span class="n">k</span><span class="p">[</span><span class="s1">'설비용량'</span><span class="p">]</span> <span class="o">=</span> <span class="n">k</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s1">'발전설비'</span><span class="p">)[</span><span class="s1">'설비용량'</span><span class="p">]</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="s1">'max'</span><span class="p">)</span>         <span class="c1"># 0 kW 표기 등 보정</span></div></div><div class='ln gap'>⋮</div><div class='ln '><div class='no'>170</div><div class='mk'></div><div class='tx hl'><span class="c1"># (a) 연료전지: 기저 전원처럼 출력이 일정 → 과거 28일 중앙값 대비 이탈 탐지 (3σ, MAD 기반)</span></div></div><div class='ln '><div class='no'>171</div><div class='mk'></div><div class='tx hl'><span class="n">fc_res</span> <span class="o">=</span> <span class="p">[]</span></div></div><div class='ln '><div class='no'>172</div><div class='mk'></div><div class='tx hl'><span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">k</span><span class="p">[</span><span class="n">k</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s1">'연료전지'</span><span class="p">]</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s1">'d'</span><span class="p">)</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s1">'발전설비'</span><span class="p">):</span></div></div><div class='ln '><div class='no'>173</div><div class='mk'></div><div class='tx hl'>    <span class="n">g</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">set_index</span><span class="p">(</span><span class="s1">'d'</span><span class="p">)</span></div></div><div class='ln on'><div class='no'>174</div><div class='mk'><span>③</span></div><div class='tx hl'>    <span class="n">base</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">cf</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="mi">28</span><span class="p">,</span> <span class="n">min_periods</span><span class="o">=</span><span class="mi">14</span><span class="p">)</span><span class="o">.</span><span class="n">median</span><span class="p">()</span></div></div><div class='ln on'><div class='no'>175</div><div class='mk'><span>④</span></div><div class='tx hl'>    <span class="n">mad</span> <span class="o">=</span> <span class="p">(</span><span class="n">g</span><span class="o">.</span><span class="n">cf</span> <span class="o">-</span> <span class="n">base</span><span class="p">)</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="mi">90</span><span class="p">,</span> <span class="n">min_periods</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span><span class="o">.</span><span class="n">median</span><span class="p">()</span> <span class="o">*</span> <span class="mf">1.4826</span></div></div><div class='ln '><div class='no'>176</div><div class='mk'></div><div class='tx hl'>    <span class="n">z</span> <span class="o">=</span> <span class="p">(</span><span class="n">g</span><span class="o">.</span><span class="n">cf</span> <span class="o">-</span> <span class="n">base</span><span class="p">)</span> <span class="o">/</span> <span class="n">mad</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span></div></div><div class='ln '><div class='no'>177</div><div class='mk'></div><div class='tx hl'>    <span class="n">drop</span> <span class="o">=</span> <span class="n">base</span> <span class="o">-</span> <span class="n">g</span><span class="o">.</span><span class="n">cf</span></div></div><div class='ln on'><div class='no'>178</div><div class='mk'><span>⑤</span></div><div class='tx hl'>    <span class="n">g</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">base</span><span class="o">=</span><span class="n">base</span><span class="p">,</span> <span class="n">z</span><span class="o">=</span><span class="n">z</span><span class="p">,</span> <span class="n">alert</span><span class="o">=</span><span class="p">(</span><span class="n">z</span> <span class="o">&lt;</span> <span class="o">-</span><span class="mi">3</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">drop</span> <span class="o">&gt;=</span> <span class="mf">0.15</span><span class="p">))</span>   <span class="c1"># 통계적으로 이탈(3σ) + 실무적으로 의미 있는 하락(설비용량의 15%p 이상)</span></div></div></div></div></body></html>
