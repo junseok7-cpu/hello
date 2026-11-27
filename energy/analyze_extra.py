@@ -38,11 +38,12 @@ j['dem_lag1'] = j.demand_GWh.shift(1); j['demmax_lag1'] = j.demand_max_GW.shift(
 j['msin'] = np.sin(2 * np.pi * j.index.month / 12); j['mcos'] = np.cos(2 * np.pi * j.index.month / 12)
 dow = pd.get_dummies(j.index.dayofweek, prefix='dow', drop_first=True).astype(float); dow.index = j.index
 j = j.join(dow); DOW = list(dow.columns)
+L_missing = int(j.LNG.isna().sum() + j.demand_GWh.isna().sum())   # 빠진 날 수(평가에서 제외됨)
 j = j.dropna()
 tr, te = j[j.index.year <= 2020], j[j.index.year == 2021]
 
-FEAT = {  # 관측 수요: 당일 실제 수요를 넣음 → 상한선 / 전날 수요: 당일 정보 없이 하루 전에 할 수 있는 예측
-    '관측 수요 입력(상한선)': ['demand_GWh', 'demand_max_GW', 'msin', 'mcos', 'lag1', 'lag7'] + DOW,
+FEAT = {  # 관측 수요: 당일 실제 수요를 넣음 → 사후 참고 실험 / 전날 수요: 당일 정보 없이 하루 전에 할 수 있는 예측
+    '관측 수요 입력(사후 참고)': ['demand_GWh', 'demand_max_GW', 'msin', 'mcos', 'lag1', 'lag7'] + DOW,
     '전날 수요만 입력(현실 조건)': ['dem_lag1', 'demmax_lag1', 'msin', 'mcos', 'lag1', 'lag7'] + DOW,
 }
 mean_te = float(te.LNG.mean())
@@ -50,9 +51,11 @@ def metr(y, p):
     mae, rmse = float(np.mean(np.abs(y - p))), float(np.sqrt(np.mean((y - p) ** 2)))
     return dict(MAE_GWh=round(mae, 2), RMSE_GWh=round(rmse, 2), nMAE=round(mae / mean_te * 100, 2), nRMSE=round(rmse / mean_te * 100, 2))
 pers = metr(te.LNG, te.lag1); pers['Skill'] = 0.0
-L = dict(train='2018~2020', test='2021', test_days=int(len(te)), test_mean_GWh=round(mean_te, 1),
+wk = metr(te.LNG, te.lag7); wk['Skill'] = round(1 - wk['RMSE_GWh'] / pers['RMSE_GWh'], 3)
+L = dict(train='2018~2020', test='2021', test_days=int(len(te)), test_mean_GWh=round(mean_te, 1), missing_days=L_missing,
          note='Skill = 1 - RMSE/RMSE(어제 값). nMAE·nRMSE는 2021년 일평균 LNG 발전량 대비 %.',
-         models={'어제 값(Persistence)': pers}, pred={})
+         models={'어제 값(Persistence)': pers, '전주 같은 요일 값': wk}, pred={},
+         caution='당일 관측 수요 조건은 수요가 하루가 끝나야 확정되므로 사후 참고 실험이다. 전날 수요 조건은 전날 수요·LNG 집계가 예측 발행 시각까지 확보된다고 가정한다. 시험은 2021년 한 해뿐이다.')
 for cond, cols in FEAT.items():
     for mname, m in [('선형회귀', LinearRegression()), ('GBDT', HistGradientBoostingRegressor(random_state=0, max_iter=300, learning_rate=0.05))]:
         p = m.fit(tr[cols], tr.LNG).predict(te[cols])
@@ -64,7 +67,7 @@ print('lng_pred', json.dumps(R['lng_pred']['models'], ensure_ascii=False, indent
 fig, ax = plt.subplots(figsize=(10, 3.8))
 ax.plot(te.index, te.LNG, color=INK, lw=1.2, label='실제 LNG 발전량')
 ax.plot(te.index, te.lag1, color=MUTED, lw=.8, ls='--', label='어제 값')
-k1 = '선형회귀 · 관측 수요 입력(상한선)'; k2 = '선형회귀 · 전날 수요만 입력(현실 조건)'
+k1 = '선형회귀 · 관측 수요 입력(사후 참고)'; k2 = '선형회귀 · 전날 수요만 입력(현실 조건)'
 ax.plot(te.index, L['pred'][k1], color=MAIN, lw=1.4, label=f"선형회귀·관측 수요 (Skill {L['models'][k1]['Skill']:.2f})")
 ax.plot(te.index, L['pred'][k2], color=ACC, lw=1.2, label=f"선형회귀·전날 수요 (Skill {L['models'][k2]['Skill']:.2f})")
 ax.set_ylabel('GWh/일'); ax.set_title('2021년 일별 LNG 발전량 — 실제와 예측', loc='left'); ax.legend(frameon=False, fontsize=8.5, ncol=2)
@@ -81,32 +84,46 @@ k = k[~k['발전설비'].str.contains('ESS')].drop_duplicates(['연월일', '발
 k['type'] = np.select([k['발전설비'].str.contains('풍력'), k['발전설비'].str.contains('소수력')], ['풍력', '소수력'], '기타')
 k['cf'] = k['발전량'] / (k['설비용량'] * 24)
 
-def detect(g, abs_drop=0.15):  # analyze.py 연료전지 블록과 같은 규칙: 과거 28일 중앙값 대비 3σ(MAD) 이탈 + 설비용량 15%p 이상 하락
+def detect(g, abs_drop=0.15, rel_drop=0.5, min_base=0.03):
+    """연료전지 규칙(과거 28일 중앙값 대비 3σ(MAD) 이탈 + 설비용량 15%p 하락)과
+    상대 하락 규칙(28일 중앙값의 50% 이상 하락, 기준 이용률 3% 이상일 때만)을 함께 계산한다.
+    날짜는 달력 기준으로 다시 맞춰 빠진 날이 연속 구간을 잇지 않게 한다."""
     g = g.sort_values('d').set_index('d')
-    base = g.cf.shift(1).rolling(28, min_periods=14).median()
-    mad = (g.cf - base).abs().shift(1).rolling(90, min_periods=30).median() * 1.4826
-    z = (g.cf - base) / mad.replace(0, np.nan)
-    alert = (z < -3) & ((base - g.cf) >= abs_drop)
-    zero = (g.cf <= 0.001)
-    streak = zero.groupby((~zero).cumsum()).cumsum().max() if len(g) else 0
-    return dict(days=int(len(g)), cf_median=round(float(g.cf.median()), 3), alerts=int(alert.sum()),
-                events=int((alert & ~alert.shift(1, fill_value=False)).sum()),
-                zero_days=int(zero.sum()), longest_zero_streak=int(streak))
+    obs = len(g)
+    if obs < 30:
+        return dict(days=obs, judgeable=False, note='관측 30일 미만 — 판정 불가')
+    g = g.asfreq('D')                                     # 빠진 날은 NaN
+    cf = g.cf
+    base = cf.shift(1).rolling(28, min_periods=14).median()
+    mad = (cf - base).abs().shift(1).rolling(90, min_periods=30).median() * 1.4826
+    z = (cf - base) / mad.replace(0, np.nan)
+    a_abs = ((z < -3) & ((base - cf) >= abs_drop)).fillna(False)
+    a_rel = ((z < -3) & (base >= min_base) & ((base - cf) / base >= rel_drop)).fillna(False)
+    ev = lambda a: int((a & ~a.shift(1, fill_value=False)).sum())
+    zero = (cf.abs() <= 0.001)                            # 결측(NaN)은 False → 연속 구간이 끊김
+    streak = int(zero.groupby((~zero).cumsum()).cumsum().max())
+    return dict(days=obs, missing_days=int(cf.isna().sum()), judgeable=True, cf_median=round(float(cf.median()), 3),
+                alerts=int(a_abs.sum()), events=ev(a_abs),            # 연료전지 규칙: 알림 일수 / 구간 수
+                alerts_rel=int(a_rel.sum()), events_rel=ev(a_rel),    # 상대 하락 규칙
+                zero_days=int(zero.sum()), longest_zero_streak=streak)
 W = {}
 for (t, name), g in k[k.type != '기타'].groupby(['type', '발전설비']):
     W[name] = dict(type=t, **detect(g))
-R['wind_hydro'] = dict(rule='과거 28일 중앙값 대비 3σ(MAD) 이탈 + 설비용량 15%p 이상 하락 (연료전지와 같은 규칙)',
+R['wind_hydro'] = dict(rule='alerts/events: 과거 28일 중앙값 대비 3σ(MAD) 이탈 + 설비용량 15%p 이상 하락(연료전지와 같은 규칙). alerts_rel/events_rel: 3σ 이탈 + 기준 대비 50% 이상 하락(기준 이용률 3% 이상). alerts는 일수, events는 구간 수. 날짜는 달력 기준.',
                        caution='풍력은 평소 이용률이 10% 안팎이라 15%p 하락 조건이 거의 성립하지 않는다. 0건은 "이상 없음"이 아니라 이 규칙이 풍력에 맞지 않는다는 뜻이다. 소수력은 강수에 따라 출력이 크게 바뀌어 알림 일부는 가뭄·갈수기일 수 있다.',
                        plants=W)
 print('wind_hydro', json.dumps(W, ensure_ascii=False, indent=1))
 
-fig, ax = plt.subplots(figsize=(8, 3.6))
-names = list(W); vals = [W[n]['alerts'] for n in names]
-cols = [ACC if W[n]['type'] == '풍력' else MAIN for n in names]
-b = ax.barh(names[::-1], vals[::-1], color=cols[::-1])
-for bb, n in zip(b, names[::-1]):
-    ax.text(bb.get_width() + .5, bb.get_y() + bb.get_height() / 2, f"{W[n]['alerts']}일 ({W[n]['events']}구간) · 중앙 이용률 {W[n]['cf_median']*100:.0f}%", va='center', fontsize=8.5, color=INK)
-ax.set_xlabel('이상 후보 알림 일수'); ax.set_xlim(0, max(vals + [1]) * 1.9); ax.set_title('풍력(주황)·소수력(청록) 설비별 이상 후보 알림', loc='left')
+fig, ax = plt.subplots(figsize=(8, 3.8))
+names = [n for n in W if W[n].get('judgeable')]; y = np.arange(len(names))
+va = [W[n]['alerts'] for n in names]; vr = [W[n]['alerts_rel'] for n in names]
+ax.barh(y + .2, va, .4, color=MAIN, label='연료전지 규칙(15%p 하락)'); ax.barh(y - .2, vr, .4, color=ACC, label='상대 하락 규칙(50% 하락)')
+for i, n in enumerate(names):
+    ax.text(max(va[i], vr[i]) + .5, i, f"{W[n]['type']} · 중앙 이용률 {W[n]['cf_median']*100:.0f}%", va='center', fontsize=8.5, color=INK)
+ax.set_yticks(y, names); ax.invert_yaxis(); ax.set_xlabel('이상 후보 알림 일수'); ax.set_xlim(0, max(va + vr + [1]) * 1.8)
+skip = [n for n in W if not W[n].get('judgeable')]
+ax.set_title('풍력·소수력 설비별 이상 후보 알림' + (f"  (판정 불가: {', '.join(skip)})" if skip else ''), loc='left', fontsize=10)
+ax.legend(frameon=False, fontsize=8.5, loc='lower right')
 save('f12_wind_hydro.png')
 
 json.dump(R, open(RJ, 'w', encoding='utf-8'), ensure_ascii=False, indent=1, default=str)
