@@ -26,7 +26,7 @@ def save(name): plt.tight_layout(); plt.savefig(F + name, dpi=200); plt.close()
 # ───────────────────────── 1. 화력 LNG 일별 발전량 예측 ─────────────────────────
 dm = pd.read_csv(D + 'demand_hourly_2017_2021.csv'); dm['d'] = pd.to_datetime(dm['거래일'])
 hrs = [f'{i}시' for i in range(1, 25)]
-dm['demand_GWh'] = dm[hrs].sum(axis=1) / 1000          # MW × 1h → GWh
+dm['demand_GWh'] = dm[hrs].sum(axis=1, min_count=24) / 1000   # 24시간이 다 있는 날만          # MW × 1h → GWh
 dm['demand_max_GW'] = dm[hrs].max(axis=1) / 1000
 fu = pd.read_csv(D + 'fuel_daily_region_2018_2022.csv'); fu.columns = [c.strip() for c in fu.columns]
 fu['d'] = pd.to_datetime(fu['거래일자'])
@@ -38,11 +38,12 @@ j['dem_lag1'] = j.demand_GWh.shift(1); j['demmax_lag1'] = j.demand_max_GW.shift(
 j['msin'] = np.sin(2 * np.pi * j.index.month / 12); j['mcos'] = np.cos(2 * np.pi * j.index.month / 12)
 dow = pd.get_dummies(j.index.dayofweek, prefix='dow', drop_first=True).astype(float); dow.index = j.index
 j = j.join(dow); DOW = list(dow.columns)
-L_missing = int(j.LNG.isna().sum() + j.demand_GWh.isna().sum())   # 빠진 날 수(평가에서 제외됨)
+L_missing = int(j[['LNG', 'demand_GWh']].isna().any(axis=1).sum())   # LNG나 수요가 빠진 날 수(날짜 기준, 평가에서 제외됨)
 j = j.dropna()
 tr, te = j[j.index.year <= 2020], j[j.index.year == 2021]
 
-FEAT = {  # 관측 수요: 당일 실제 수요를 넣음 → 사후 참고 실험 / 전날 수요: 당일 정보 없이 하루 전에 할 수 있는 예측
+FEAT = {  # 수요 없음 = 수요 피처의 기여 확인용 / 관측 수요 = 당일 실제 수요(사후 참고) / 전날 수요 = 하루 전에 할 수 있는 현실 조건
+    '수요 없음(달력+과거 LNG)': ['msin', 'mcos', 'lag1', 'lag7'] + DOW,
     '관측 수요 입력(사후 참고)': ['demand_GWh', 'demand_max_GW', 'msin', 'mcos', 'lag1', 'lag7'] + DOW,
     '전날 수요만 입력(현실 조건)': ['dem_lag1', 'demmax_lag1', 'msin', 'mcos', 'lag1', 'lag7'] + DOW,
 }

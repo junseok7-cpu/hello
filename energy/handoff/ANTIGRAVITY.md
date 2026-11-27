@@ -21,11 +21,11 @@
 
 ## 작업 B — 추가 분석 실행
 1. cd energy
-2. python analyze.py   (약 1분. results/results.json, figures/f1~f10 재생성)
+2. python analyze.py   (약 1~2분. results/results.json, figures/f1~f10 재생성. 보완 실험 solar_issue_14·solar_interval_issue_14·fuelcell_cusum도 함께 계산됨)
 3. python analyze_extra.py   (수 초. results.json에 lng_pred·wind_hydro 추가, figures/f11_lng_pred.png·f12_wind_hydro.png 생성)
 4. 확인할 것:
    - results.json의 기존 값이 HANDOFF_v3.md 2장과 같은지(예: LightGBM nRMSE 6.05, 연료전지 51구간). 다르면 고치지 말고 차이를 보고한다.
-   - lng_pred.models와 wind_hydro.plants 전체를 그대로 보고한다.
+   - lng_pred.models, wind_hydro.plants, solar_issue_14, solar_interval_issue_14(calibrated와 by_month), fuelcell_cusum.plants 전체를 그대로 보고한다. results.json에 errors 키가 있으면 그 내용도 보고한다.
    - f11, f12 그림을 열어 글자가 깨지지 않았는지 본다(한글 폰트 없으면 analyze_extra.py 맨 위 폰트 목록에 이 PC의 폰트 경로를 추가).
 5. 오류가 나면 코드를 크게 바꾸지 말고, 오류 메시지와 해당 CSV의 열 이름(head 3줄)을 보고한다.
 
@@ -41,6 +41,8 @@
   - 기존 수치 일치 여부: (일치 / 다른 항목과 값)
   - lng_pred.models: (JSON 그대로)
   - wind_hydro.plants: (JSON 그대로)
+  - solar_issue_14 / solar_interval_issue_14 / fuelcell_cusum: (JSON 그대로)
+  - errors: (있으면)
   - 문제·질문:
 
 ## 규칙

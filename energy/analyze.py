@@ -122,6 +122,53 @@ R['interval'] = dict(raw_coverage=cov(df.p10, df.p90), conformal_qhat=round(qhat
                      raw_width=round(float((df.p90 - df.p10)[EV].mean()*100), 2), cal_width=round(float((df.p90c - df.p10c)[EV].mean()*100), 2))
 log('interval', R['interval'])
 
+# ── 보완 실험(GPT 조사 반영, handoff/gpt_research.md) — 실패해도 기존 결과는 저장되도록 감싼다 ──
+# ① 발행 시각 기준 평가: 전날 14시에 예측한다고 가정 → 관측 기상·lag24를 빼고 lag48·lag168·달력·대기권 밖 일사량만 사용
+# ② 같은 입력으로 80% 예측 범위: 2023 상반기로 조기 종료, 하반기로 보정(보정 표본과 모델 선택 표본 분리)
+try:
+    l48 = key.copy(); l48['t'] = l48.t + pd.Timedelta(hours=48)
+    df = df.merge(l48.rename(columns={'cf': 'lag48'}), on=['시도명', 't'], how='left')
+    ISSUE = TIME + ASTRO + ['lag48', 'lag168']
+    s_ok = (df.extra > 0) & df.cf.notna() & (df.cap > 0)
+    issue_ev = TE & s_ok & df.lag48.notna()
+    def fit_issue(alpha=None):
+        tr_, st_ = TR & s_ok, VA & (df.t.dt.month <= 6) & s_ok
+        p_ = dict(n_estimators=3000, learning_rate=0.05, num_leaves=63, min_child_samples=50, subsample=0.8,
+                  subsample_freq=1, colsample_bytree=0.8, random_state=0, verbose=-1)
+        if alpha is not None: p_.update(objective='quantile', alpha=alpha)
+        return lgb.LGBMRegressor(**p_).fit(df.loc[tr_, ISSUE], df.loc[tr_, 'cf'], eval_set=[(df.loc[st_, ISSUE], df.loc[st_, 'cf'])],
+                                           categorical_feature=['region'], callbacks=[lgb.early_stopping(100, verbose=False)])
+    df['p_issue14'] = pred(fit_issue(), ISSUE).clip(0, 1)
+    R['solar_issue_14'] = dict(
+        issue='목표일 전날 14:00 발행 가정(시각은 KST로 가정). 관측 기상·lag24 미사용', features=ISSUE,
+        test_rows=int(issue_ev.sum()), test_dates=int(df.loc[issue_ev, 't'].dt.normalize().nunique()),
+        lag48_baseline=metr(df.lag48, issue_ev), lightgbm=metr(df.p_issue14, issue_ev),
+        observed_weather_reference=metr(df.p_main, issue_ev))
+    for k_ in ('lightgbm', 'observed_weather_reference'):
+        R['solar_issue_14'][k_]['Skill_vs_lag48'] = round(1 - R['solar_issue_14'][k_]['nRMSE'] / R['solar_issue_14']['lag48_baseline']['nRMSE'], 3)
+    log('solar_issue_14', R['solar_issue_14'])
+
+    al = 0.20
+    q10, q90 = pred(fit_issue(0.10), ISSUE).clip(0, 1), pred(fit_issue(0.90), ISSUE).clip(0, 1)
+    lo, hi = np.minimum(q10, q90), np.maximum(q10, q90)              # 분위수 교차 정리
+    cal = VA & (df.t.dt.month >= 7) & s_ok & df.lag48.notna()
+    sc = np.maximum(lo - df.cf, df.cf - hi)[cal].to_numpy()
+    rk = int(np.ceil((len(sc) + 1) * (1 - al)))
+    qh = max(0.0, float(np.partition(sc, rk - 1)[rk - 1]))
+    loc_, hic = (lo - qh).clip(0, 1), (hi + qh).clip(0, 1)
+    def imet(lw, up, m):
+        y = df.cf[m]; lw, up = lw[m], up[m]; w = up - lw
+        pen = (2 / al) * ((lw - y).clip(lower=0) + (y - up).clip(lower=0))
+        return dict(n=int(len(y)), coverage_pct=round(float(100 * ((y >= lw) & (y <= up)).mean()), 2),
+                    mean_width_pp=round(float(100 * w.mean()), 2), interval_score_pp=round(float(100 * (w + pen).mean()), 2))
+    R['solar_interval_issue_14'] = dict(target_coverage_pct=80, early_stop='2023-01~06', calibration='2023-07~12', n_calibration=int(len(sc)),
+        qhat_cf=round(qh, 4), raw_crossings_test=int(((q10 > q90) & issue_ev).sum()),
+        raw=imet(lo, hi, issue_ev), calibrated=imet(loc_, hic, issue_ev),
+        by_month={int(mo): imet(loc_, hic, issue_ev & (df.t.dt.month == mo)) for mo in sorted(df.loc[issue_ev, 't'].dt.month.unique())})
+    log('solar_interval_issue_14', R['solar_interval_issue_14']['calibrated'])
+except Exception as e:
+    R.setdefault('errors', {})['solar_issue_14'] = repr(e); log('solar_issue_14 실패', repr(e))
+
 # 지역별·월별 성능
 reg = []
 for r, g in df[EV].groupby('시도명'):
@@ -182,6 +229,31 @@ R['fuelcell'] = {n: dict(days=int(len(g)), alerts=int(g.alert.sum()), alert_rate
                          cf_median=round(float(g.cf.median()), 3), drops=int(g.alert.sum()),
                          events=int((g.alert & ~g.alert.shift(1, fill_value=False)).sum()))
                  for n, g in fcd.groupby('발전설비')}
+# (a-2) 연료전지 지속 저하(CUSUM, GPT 조사 반영): 처음 90일을 고정 기준선으로 두고 하락을 누적 → 28일 기준선이 놓치는 장기 저하 후보
+try:
+    R['fuelcell_cusum'] = dict(rule='처음 90달력일(유효 60일 이상) 중앙값·MAD 고정, 하방 CUSUM k=0.5, h=4, 척도 하한 0.02. 결측일은 누적을 끊음',
+                               plants={})
+    for name, g in fcd.groupby('발전설비'):
+        dd = g.sort_values('d').set_index('d')[['cf', 'alert', 'z']].asfreq('D')
+        cf_ = dd.cf.where(dd.cf.between(0, 1.05)); bl, mon_ = cf_.iloc[:90].dropna(), cf_.iloc[90:]
+        if len(bl) < 60 or not mon_.notna().any():
+            R['fuelcell_cusum']['plants'][name] = dict(judgeable=False, baseline_obs=int(len(bl))); continue
+        c0 = float(bl.median()); scl = max(1.4826 * float((bl - c0).abs().median()), 0.02)
+        sc_, vals = 0.0, []
+        for v in mon_:
+            if pd.isna(v): sc_ = 0.0; vals.append(np.nan); continue
+            sc_ = max(0.0, sc_ + (c0 - v) / scl - 0.5); vals.append(sc_)
+        slow = pd.Series(vals, index=mon_.index).ge(4.0)
+        acute = dd.loc[mon_.index, 'alert'].eq(True)
+        st = slow & ~slow.shift(1, fill_value=False)
+        R['fuelcell_cusum']['plants'][name] = dict(judgeable=True, baseline_end=str(cf_.index[89].date()), baseline_cf=round(c0, 3),
+            scale_cf=round(scl, 4), monitored_days=int(mon_.notna().sum()), missing_days=int(mon_.isna().sum()),
+            first_alert_date=(str(slow.idxmax().date()) if slow.any() else None),   # 기준선 대비 지속 저하가 처음 임계값을 넘은 날
+            cusum_alert_days=int(slow.sum()), cusum_events=int(st.sum()), both_alert_days=int((slow & acute).sum()),
+            first_starts=[str(x.date()) for x in st.index[st]][:5])
+    log('fuelcell_cusum', R['fuelcell_cusum']['plants'])
+except Exception as e:
+    R.setdefault('errors', {})['fuelcell_cusum'] = repr(e); log('fuelcell_cusum 실패', repr(e))
 # (b) 태양광: 같은 날 다른 태양광 발전소 대비 비율 → 날씨 영향 제거 후 저하 탐지
 sol = k[k.type == '태양광'].copy()
 def area(n):
