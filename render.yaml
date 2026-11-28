@@ -3,6 +3,8 @@ services:
   - type: web
     name: math-site
     runtime: python
+    plan: free
+    region: singapore
     rootDir: math-site
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
