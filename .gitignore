@@ -15,3 +15,4 @@ math-site/grader/config.env
 math-site/inbox/*
 !math-site/inbox/.gitkeep
 math-site/gpt_review_result.md
+math-site/bundles/

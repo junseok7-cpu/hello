@@ -122,3 +122,36 @@ SCIENCE_REQUIREMENT = {
     "calc": "식을 세운 근거, 계산 과정, 단위를 포함한 최종 답",
     "essay": "답 + 그렇게 생각한 이유(근거가 되는 개념, 실험 결과 해석 등)",
 }
+
+ANALYZE_PAGE = """너는 {subject_name} 문제집·답지를 문제 단위로 옮겨 적는 꼼꼼한 조교다. 한 글자도 빠뜨리거나 바꾸지 않는 것이 가장 중요하다.
+
+[자료] {title} / {grade} / 파일 '{source}' {where}
+{image_note}
+
+[이 부분에서 뽑은 글자 (원본 그대로)]
+{text}
+{blocks}
+
+[할 일]
+1. 이 부분이 문제인지, 답지(정답·해설)인지, 둘 다인지 판단한다. 개념 설명·예제 풀이·목차는 버린다.
+2. 문제는 하나도 빠짐없이 problems 에 넣는다.
+   - body: 문제 전문을 그대로. 위 '뽑은 글자'가 있으면 그 글자를 우선 쓰고, 그림에서만 보이는 내용(그래프 눈금 등)은 [그림 설명: ...]으로 덧붙인다.
+   - 수식은 LaTeX로 $...$ 안에. 글자에 $...$⟦hwp:원본⟧ 형태가 있으면 원본 한글 수식과 비교해 LaTeX가 맞는지 확인·수정하고 ⟦hwp:...⟧ 는 지운다.
+   - 객관식 보기(①~⑤)와 <보기> ㄱ·ㄴ·ㄷ 는 지우지 않고 그대로 둔다.
+   - section: 번호가 단원·유형마다 다시 시작되면 그 제목(예: "유형 03"), 아니면 "".
+   - number: 문제 번호 문자열 (예: "034").
+   - qtype: 옳은 것 고르기 객관식 "mc_right", 옳지 않은 것 고르기 "mc_wrong", 수치 계산 "calc", 그 밖 "essay".
+   - unit_id: 아래 단원 목록에서 가장 알맞은 id.
+   - difficulty: "하" | "중" | "상". 교재 표시(기본/발전/심화 등)를 따르고, 없으면 단계 수·개념 결합 정도로 판단.
+   - has_figure: 그림·그래프·도형·실험 장치 그림이 있으면 true.
+{figure_rule}
+   - unclear: 글자가 흐리거나 잘려서 확실하지 않은 부분이 있으면 무엇인지 적고, 없으면 "".
+3. 답지(정답·해설)는 answers 에: section, number, answer(최종 답), solution(해설 전문, 수식 LaTeX).
+4. 앞 조각의 끝부분(참고용)에서 시작해 이번 조각으로 이어지는 문제는 완성해서 넣고, 참고용 부분에만 있는 문제는 넣지 않는다.
+
+단원 목록:
+{units}
+
+아래 JSON 하나만 출력한다.
+{{"page_type": "problems|answers|mixed|other", "problems": [{{"section": "", "number": "", "body": "", "qtype": "essay", "unit_id": 0, "difficulty": "중", "has_figure": false, {figure_field} "unclear": ""}}], "answers": [{{"section": "", "number": "", "answer": "", "solution": ""}}]}}
+"""

@@ -40,7 +40,8 @@ def main():
             if it.get(key):
                 files[field] = (os.path.basename(it[key]), open(os.path.join(a.bundle, it[key]), "rb").read())
         r = c.post("/api/grader/problem", data=dict(
-            unit_id=uid, difficulty=it["difficulty"], qtype=it.get("qtype", "essay"), body=it.get("body", ""), answer=it.get("answer", ""),
+            unit_id=uid, difficulty=it["difficulty"], qtype=it.get("qtype", "essay"), body=it.get("body", ""),
+            review_note=it.get("review_note", ""), image_kind=it.get("image_kind", "figure"), answer=it.get("answer", ""),
             solution=it.get("solution", ""), source=it.get("source", ""),
             status="published" if a.publish else "draft"), files=files or None)
         r.raise_for_status()

@@ -3,7 +3,7 @@
 {% macro problem_view(p, show_meta=true, both=false) %}
 <div class="problem">
   {% if show_meta %}<div class="meta">{{ diff_badge(p.difficulty) }} <span class="badge subj-{{ p.subject }}">{{ SUBJECTS[p.subject] }}</span> {{ p.unit.grade }} · {{ p.unit.name }}{% if p.source %} · <span class="muted">{{ p.source }}</span>{% endif %}</div>{% endif %}
-  {% if p.body and (both or not p.image_id) %}<div class="math body">{{ p.body }}</div>{% endif %}
+  {% if p.body and (both or not p.image_id or p.image_kind != 'full') %}<div class="math body">{{ p.body }}</div>{% endif %}
   {% if p.image_id %}<img class="pimg" src="/blob/{{ p.image_id }}" alt="문제 그림">{% endif %}
 </div>
 {% endmacro %}

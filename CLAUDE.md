@@ -32,6 +32,7 @@
 # 수학·과학 적립 사이트 (`math-site/`)
 
 중·고등학생 서술형 수학·과학 적립 학습 사이트 (과목별 규칙은 `app/logic.py`의 `RULES`). 설명은 `math-site/README.md`.
-- **문제집 등록 요청** ("inbox 문제집 등록해 줘"): `math-site/inbox/`의 PDF를 쪽별로 이미지로 뽑아 직접 읽고 → 문제마다 과목(`subject`: math/science)·유형(`qtype`: essay/calc/mc_right/mc_wrong)·학년·단원(사이트 단원명과 똑같이)·난이도(하/중/상)·본문(LaTeX `$...$`)·답·풀이를 `problems.json` 묶음으로 만든다. 그림 있는 문제만 잘라서 `img/`에 넣는다. → `python math-site/tools/upload_bundle.py <묶음폴더>` (기본은 초안, 선생님이 확인 후 출제)
+- **문제집 등록 요청** (PDF/HWP/HWPX를 받으면): 파일을 `math-site/inbox/`에 두고 `python math-site/tools/ingest.py <파일들> --subject math|science --grade <학년> --title "<교재 단원>"` (문제·답지 파일 함께). 결과 `math-site/bundles/<제목>/`의 report.md(빠진 번호·짝 없는 답지·확인 필요)를 사용자에게 보고하고, 사이트가 있으면 `--upload`(초안으로 등록, 선생님이 확인 후 출제). 큰 교재는 단원별로 나눠 돌린다.
+- ⚠️ 저장소가 public이다. `inbox/`, `bundles/`의 문제집 내용은 절대 커밋하지 않는다 (.gitignore 처리됨)
 - 출제·적립 규칙을 바꾸면 `math-site/tests/test_logic.py`도 같이 고치고 `python -m pytest math-site/tests` 통과 확인
 - 채점 기준 문구는 `math-site/grader/prompts.py`

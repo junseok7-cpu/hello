@@ -8,7 +8,6 @@
 설정: 같은 폴더의 config.env (SITE_URL, GRADER_TOKEN)
 """
 import argparse
-import io
 import os
 import shutil
 import sys
@@ -132,95 +131,36 @@ def write_report(site: Site, job: dict):
         shutil.rmtree(wd, ignore_errors=True)
 
 
-# ------------------------------------------------------------------ PDF 등록
-
-def render_pages(pdf_path, out_dir, prefix, dpi=150):
-    import pymupdf
-    doc = pymupdf.open(pdf_path)
-    paths = []
-    for i, page in enumerate(doc):
-        pth = os.path.join(out_dir, f"{prefix}_{i + 1:03d}.png")
-        page.get_pixmap(dpi=dpi).save(pth)
-        paths.append(pth)
-    return paths
-
-
-def crop(png_path, bbox, pad=15):
-    from PIL import Image
-    im = Image.open(png_path)
-    w, h = im.size
-    x0, y0, x1, y1 = [max(0, min(1000, int(v))) for v in bbox]
-    if x1 - x0 < 20 or y1 - y0 < 20:
-        return None
-    box = (max(0, (x0 - pad) * w // 1000), max(0, (y0 - pad) * h // 1000),
-           min(w, (x1 + pad) * w // 1000), min(h, (y1 + pad) * h // 1000))
-    out = io.BytesIO()
-    im.crop(box).save(out, "PNG")
-    return out.getvalue()
-
-
-def norm(num):
-    s = str(num).strip().lstrip("0")
-    return s or "0"
-
+# ------------------------------------------------------------------ 문제집 등록 (PDF/HWP/HWPX)
 
 def do_import(site: Site, job: dict, engine=None, log=print):
+    import ingest
     engine = engine or job["engine"]
     wd = engines.new_workdir()
     lines = []
 
     def note(msg):
         lines.append(msg)
-        log("  " + msg)
+        log(msg)
     try:
-        units = "\n".join(f"- {u['id']}: {u['name']}" for u in job["units"])
-        unit_ids = {u["id"] for u in job["units"]}
-        answers = {}
-        if job.get("answer_blob_id"):
-            apdf = site.blob(job["answer_blob_id"], os.path.join(wd, "answers.pdf"))
-            for n, img in enumerate(render_pages(apdf, wd, "ans"), 1):
-                try:
-                    res = engines.ask(engine, prompts.PAGE_ANSWERS.format(
-                        page_image=os.path.basename(img), title=job["title"], page=n), [img], wd)
-                    for a in res.get("answers", []):
-                        answers[norm(a.get("number", ""))] = a
-                    note(f"답지 {n}쪽: {len(res.get('answers', []))}개")
-                except Exception as e:
-                    note(f"답지 {n}쪽 실패: {e}")
-        ppdf = site.blob(job["problem_blob_id"], os.path.join(wd, "problems.pdf"))
-        total = matched = 0
-        for n, img in enumerate(render_pages(ppdf, wd, "page"), 1):
-            try:
-                res = engines.ask(engine, prompts.PAGE_PROBLEMS.format(
-                    subject_name={"science": "과학"}.get(job.get("subject"), "수학"),
-                    page_image=os.path.basename(img), grade=job["grade"], title=job["title"],
-                    page=n, units=units), [img], wd)
-            except Exception as e:
-                note(f"{n}쪽 실패: {e}")
-                continue
-            for q in res.get("problems", []):
-                uid = q.get("unit_id")
-                if uid not in unit_ids:
-                    uid = job["units"][0]["id"]
-                diff = q.get("difficulty") if q.get("difficulty") in ("하", "중", "상") else "중"
-                a = answers.get(norm(q.get("number", "")), {})
-                matched += bool(a)
-                # 그림이 있는 문제만 원본을 잘라 붙인다 (없으면 글자로 보여 주는 게 깔끔)
-                image = crop(img, q["bbox"]) if q.get("bbox") and q.get("has_figure") else None
-                qtype = q.get("qtype") if q.get("qtype") in ("essay", "calc", "mc_right", "mc_wrong") else "essay"
-                site.add_problem(dict(unit_id=uid, difficulty=diff, body=q.get("body", ""), qtype=qtype,
-                                      answer=a.get("answer", ""), solution=a.get("solution", ""),
-                                      source=f"{job['title']} p.{n} #{q.get('number', '')}",
-                                      status="draft", job_id=job.get("job_id", 0)), image)
-                total += 1
-            note(f"{n}쪽: {len(res.get('problems', []))}문제")
-        note(f"완료: 문제 {total}개, 답지 연결 {matched}개 → 초안으로 저장")
-        if job.get("job_id"):
-            site.import_done(job["job_id"], "\n".join(lines))
+        paths = []
+        for i, f in enumerate(job["files"]):
+            name = f"{i + 1:02d}_" + os.path.basename(f["name"] or f"file{i}.pdf")
+            paths.append(site.blob(f["blob_id"], os.path.join(wd, name)))
+        items, report = ingest.process(paths, job.get("subject", "math"), job["grade"], job["title"],
+                                       job["units"], engine, wd, log=note)
+        for it in items:
+            site.add_problem(dict(unit_id=it["unit_id"], difficulty=it["difficulty"], qtype=it["qtype"],
+                                  body=it["body"], answer=it["answer"], solution=it["solution"],
+                                  source=it["source"], review_note=it["review_note"], status="draft",
+                                  image_kind=it["image_kind"],
+                                  job_id=job["job_id"]), it["image"])
+        note(f"완료: 문제 {len(items)}개를 초안으로 저장")
+        site.c.post(f"/api/grader/import/{job['job_id']}", json={"log": "\n".join(lines), "report": report})
     except Exception as e:
         traceback.print_exc()
-        if job.get("job_id"):
-            site.import_done(job["job_id"], "\n".join(lines + [f"오류: {e}"]), error=True)
+        site.c.post(f"/api/grader/import/{job['job_id']}",
+                    json={"log": "\n".join(lines + [f"오류: {e}"]), "error": True})
     finally:
         shutil.rmtree(wd, ignore_errors=True)
 
@@ -243,7 +183,7 @@ def main():
                 grade(site, job)
                 continue
             if job["type"] == "import":
-                print(f"[PDF 등록] {job['title']} ({job['engine']})")
+                print(f"[문제집 등록] {job['title']} ({job['engine']})")
                 do_import(site, job)
                 continue
             if job["type"] == "report":

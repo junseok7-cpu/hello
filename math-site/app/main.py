@@ -434,6 +434,7 @@ def t_regrade(sid: int, u: User = Depends(teacher), db=Depends(get_db)):
 
 @app.get("/t/problems", response_class=HTMLResponse)
 def t_problems(request: Request, subject: str = "", grade: str = "", unit: int = 0, diff: str = "", status: str = "",
+               check: int = 0,
                job: int = 0, u: User = Depends(teacher), db=Depends(get_db)):
     q = db.query(Problem).join(Unit)
     if subject:
@@ -448,13 +449,15 @@ def t_problems(request: Request, subject: str = "", grade: str = "", unit: int =
         q = q.filter(Problem.status == status)
     if job:
         q = q.filter(Problem.import_job_id == job)
+    if check:
+        q = q.filter(Problem.review_note != "", Problem.review_note.isnot(None))
     problems = q.order_by(Problem.id.desc()).limit(300).all()
     units = db.query(Unit).order_by(Unit.grade, Unit.order).all()
     counts = (db.query(Unit.subject, Unit.grade, Problem.difficulty, func.count(Problem.id)).join(Problem)
               .filter(Problem.status == "published")
               .group_by(Unit.subject, Unit.grade, Problem.difficulty).order_by(Unit.subject, Unit.grade).all())
     return render(request, "t_problems.html", user=u, problems=problems, units=units,
-                  f=dict(subject=subject, grade=grade, unit=unit, diff=diff, status=status, job=job), counts=counts)
+                  f=dict(subject=subject, grade=grade, unit=unit, diff=diff, status=status, job=job, check=check), counts=counts)
 
 
 @app.post("/t/problems/bulk")
@@ -484,7 +487,7 @@ def t_problem(pid: int, request: Request, u: User = Depends(teacher), db=Depends
 async def t_problem_save(pid: int, unit_id: int = Form(...), difficulty: str = Form(...), qtype: str = Form("essay"),
                          source: str = Form(""), body: str = Form(""), answer: str = Form(""),
                          solution: str = Form(""), status: str = Form("draft"),
-                         remove_image: str = Form(""), remove_sol_image: str = Form(""),
+                         remove_image: str = Form(""), remove_sol_image: str = Form(""), review_note: str = Form(""),
                          image: UploadFile | None = File(None), sol_image: UploadFile | None = File(None),
                          u: User = Depends(teacher), db=Depends(get_db)):
     p = db.get(Problem, pid) if pid else None
@@ -493,6 +496,7 @@ async def t_problem_save(pid: int, unit_id: int = Form(...), difficulty: str = F
         db.add(p)
     p.unit_id, p.difficulty, p.source = unit_id, difficulty, source
     p.qtype = qtype if qtype in QTYPES else "essay"
+    p.review_note = review_note.strip()
     p.body, p.answer, p.solution, p.status = body, answer, solution, status
     if remove_image:
         p.image_id = None
@@ -538,18 +542,25 @@ def t_import(request: Request, u: User = Depends(teacher), db=Depends(get_db)):
 
 @app.post("/t/import")
 async def t_import_post(title: str = Form(...), grade: str = Form(...), subject: str = Form("math"),
-                        problems: UploadFile = File(...),
-                        answers: UploadFile | None = File(None), u: User = Depends(teacher), db=Depends(get_db)):
-    def put(data, mime):
-        b = Blob(data=data, mime=mime)
+                        files: list[UploadFile] = File(...), u: User = Depends(teacher), db=Depends(get_db)):
+    ids, names = [], []
+    for f in files:
+        ext = os.path.splitext(f.filename or "")[1].lower()
+        if ext not in (".pdf", ".hwp", ".hwpx"):
+            raise HTTPException(400, f"PDF, HWP, HWPX만 올릴 수 있어요: {f.filename}")
+        data = await f.read()
+        if not data:
+            continue
+        b = Blob(data=data, mime={".pdf": "application/pdf", ".hwp": "application/x-hwp",
+                                  ".hwpx": "application/hwp+zip"}[ext])
         db.add(b)
         db.flush()
-        return b.id
-    pdata = await problems.read()
-    job = ImportJob(title=title, grade=grade, subject=subj(subject), problem_blob_id=put(pdata, "application/pdf"))
-    if answers and answers.filename:
-        job.answer_blob_id = put(await answers.read(), "application/pdf")
-    db.add(job)
+        ids.append(str(b.id))
+        names.append(os.path.basename(f.filename).replace("\n", " "))
+    if not ids:
+        raise HTTPException(400, "파일을 골라 주세요")
+    db.add(ImportJob(title=title, grade=grade, subject=subj(subject), blob_ids=",".join(ids),
+                     filenames="\n".join(names)))
     db.commit()
     return back("/t/import")
 
@@ -591,6 +602,14 @@ def t_report_comment(rid: int, comment: str = Form(""), u: User = Depends(teache
     r.ai_comment, r.status = comment, "done"
     db.commit()
     return back(f"/t/reports/view?end={r.period_end}")
+
+
+@app.get("/t/import/{jid}", response_class=HTMLResponse)
+def t_import_report(jid: int, request: Request, u: User = Depends(teacher), db=Depends(get_db)):
+    j = db.get(ImportJob, jid)
+    return render(request, "t_import_report.html", user=u, j=j,
+                  n=db.query(Problem).filter_by(import_job_id=jid).count(),
+                  nc=db.query(Problem).filter(Problem.import_job_id == jid, Problem.review_note != "").count())
 
 
 @app.get("/t/settings", response_class=HTMLResponse)
@@ -652,7 +671,9 @@ def g_claim(db=Depends(get_db)):
         db.commit()
         return dict(type="import", engine=engine, job_id=j.id, title=j.title, grade=j.grade,
                     subject=j.subject or "math",
-                    problem_blob_id=j.problem_blob_id, answer_blob_id=j.answer_blob_id, units=units)
+                    files=[dict(blob_id=int(b), name=n) for b, n in
+                           zip(j.blob_ids.split(","), j.filenames.split("\n")) if b],
+                    units=units)
     if reports.ensure_reports(db):
         db.flush()
     db.query(Report).filter(Report.status == "working", Report.claimed_at < stale).update({"status": "queued"})
@@ -703,7 +724,7 @@ def g_units(grade: str = "", subject: str = "", db=Depends(get_db)):
 
 @app.post("/api/grader/problem", dependencies=[Depends(grader)])
 async def g_problem(unit_id: int = Form(...), difficulty: str = Form(...), body: str = Form(""),
-                    qtype: str = Form("essay"),
+                    qtype: str = Form("essay"), review_note: str = Form(""), image_kind: str = Form("figure"),
                     answer: str = Form(""), solution: str = Form(""), source: str = Form(""),
                     status: str = Form("draft"), job_id: int = Form(0),
                     image: UploadFile | None = File(None), sol_image: UploadFile | None = File(None),
@@ -712,7 +733,8 @@ async def g_problem(unit_id: int = Form(...), difficulty: str = Form(...), body:
     if difficulty not in DIFFS or not db.get(Unit, unit_id):
         raise HTTPException(400, "unit/difficulty")
     p = Problem(unit_id=unit_id, difficulty=difficulty, body=body, answer=answer, solution=solution,
-                qtype=qtype if qtype in QTYPES else "essay",
+                qtype=qtype if qtype in QTYPES else "essay", review_note=review_note[:2000],
+                image_kind="full" if image_kind == "full" else "figure",
                 source=source, status=status if status in ("draft", "published") else "draft",
                 import_job_id=job_id or None)
     if image and image.filename:
@@ -730,6 +752,7 @@ async def g_import_done(jid: int, request: Request, db=Depends(get_db)):
     j = db.get(ImportJob, jid)
     j.status = "error" if data.get("error") else "done"
     j.log = str(data.get("log", ""))[:5000]
+    j.report = str(data.get("report", ""))[:20000]
     _seen(db)
     db.commit()
     return dict(ok=True)

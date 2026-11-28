@@ -1,22 +1,27 @@
 {% extends "base.html" %}
 {% block body %}
-<h2>PDF로 문제 등록</h2>
+<h2>문제집·답지 등록</h2>
 <section class="card">
-<p>문제집 PDF(와 답지 PDF)를 올리면 <b>채점 PC</b>가 구독 AI로 문제를 하나씩 나누고, 단원·난이도를 분류하고, 답지와 짝지어 <b>초안</b>으로 넣어요.
-초안은 <a href="/t/problems?status=draft">문제 은행</a>에서 확인한 뒤 출제하세요.</p>
+<p><b>PDF, 한글(HWP·HWPX)</b> 파일을 올리면 <b>채점 PC</b>가 구독 AI로 문제를 하나씩 나누고, 단원·난이도·문제 유형을 분류하고, 답지와 짝지어 <b>초안</b>으로 넣어요.
+문제 파일과 답지 파일을 <b>한꺼번에</b> 골라도 되고, 답지가 같은 파일 뒤쪽에 있어도 알아서 나눠요.</p>
 {% if not online %}<p class="alert">지금 채점 PC가 꺼져 있어요. 올려 두면 PC를 켰을 때 처리돼요.</p>{% endif %}
-<p class="muted">한 번에 20~30쪽 정도로 나눠 올리면 빠르고 정확해요. 한 PDF는 한 학년으로 맞춰 주세요.</p>
+<details class="small"><summary>손실 없이 넣는 요령</summary>
+<ul>
+<li><b>한글 파일이 있으면 한글 파일로</b> 올려 주세요. 글자와 수식을 원본 그대로 읽어서 PDF보다 정확해요. (수식은 LaTeX로 바꾸고 원본도 같이 확인해요)</li>
+<li>PDF는 <b>글자를 드래그할 수 있는 PDF</b>(한글·워드에서 저장한 것)가 좋아요. 스캔본도 되지만 오타 확인이 필요해요.</li>
+<li>한 번에 한 학년·한 과목으로, 단원 20~40쪽 정도씩 나눠 올리면 빠르고 정확해요.</li>
+<li>'배포용 문서'나 암호 걸린 한글 파일은 읽을 수 없어요. 일반 문서로 다시 저장해 주세요.</li>
+</ul></details>
 <form method="post" enctype="multipart/form-data" class="stack">
-<label>이름 <input name="title" required placeholder="예: 쎈 중2-1 1단원"></label>
+<label>이름 <input name="title" required placeholder="예: 오투 중2-1 1단원"></label>
 <label>과목 <select name="subject">{% for k, v in SUBJECTS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
-<label>학년 <select name="grade">{% for g in GRADES %}<option>{{ g }}</option>{% endfor %}</select></label>
-<label>문제 PDF <input type="file" name="problems" accept="application/pdf" required></label>
-<label>답지 PDF (선택) <input type="file" name="answers" accept="application/pdf"></label>
+<label>학년 <select name="grade">{% for g in STUDENT_GRADES %}<option>{{ g }}</option>{% endfor %}</select></label>
+<label>파일 (여러 개 선택 가능: 문제 + 답지) <input type="file" name="files" accept=".pdf,.hwp,.hwpx" multiple required></label>
 <button class="btn big">올리기</button></form></section>
 <section class="card"><h3>작업 목록</h3><table>
-<tr><th>#</th><th>이름</th><th>과목</th><th>학년</th><th>상태</th><th>문제</th><th>기록</th></tr>
-{% for j in jobs %}<tr><td>{{ j.id }}</td><td>{{ j.title }}</td><td>{{ SUBJECTS[j.subject or 'math'] }}</td><td>{{ j.grade }}</td>
+<tr><th>#</th><th>이름</th><th>과목</th><th>학년</th><th>상태</th><th>문제</th><th></th></tr>
+{% for j in jobs %}<tr><td>{{ j.id }}</td><td>{{ j.title }}<br><small class="muted">{{ j.filenames.replace('\n', ', ') }}</small></td><td>{{ SUBJECTS[j.subject or 'math'] }}</td><td>{{ j.grade }}</td>
 <td>{{ {'queued':'대기','working':'처리 중','done':'완료','error':'오류'}[j.status] }}</td>
-<td><a href="/t/problems?job={{ j.id }}">{{ n.get(j.id, 0) }}개</a></td><td class="muted small">{{ j.log[:200] }}</td></tr>{% endfor %}
+<td><a href="/t/problems?job={{ j.id }}">{{ n.get(j.id, 0) }}개</a></td><td><a href="/t/import/{{ j.id }}">보고서</a></td></tr>{% endfor %}
 </table></section>
 {% endblock %}

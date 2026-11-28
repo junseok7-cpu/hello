@@ -81,10 +81,12 @@ class Problem(Base):
     source = Column(String(200), default="")  # 예: 쎈 중1-1 p.12 #34
     body = Column(Text, default="")  # 문제 (마크다운 + LaTeX $...$)
     image_id = Column(Integer, ForeignKey("blobs.id"))  # 그림/원본 잘라낸 이미지
+    image_kind = Column(String(8), default="figure")  # full(문제 전체를 잘라낸 것: 글 대신 보여 줌) | figure(그림만)
     answer = Column(Text, default="")  # 최종 답
     solution = Column(Text, default="")  # 풀이 (답지)
     solution_image_id = Column(Integer, ForeignKey("blobs.id"))
     status = Column(String(10), default="draft")  # draft | published
+    review_note = Column(Text, default="")  # 자동 등록 때 확인이 필요한 점 (답지 없음, 흐린 글자 등)
     import_job_id = Column(Integer, ForeignKey("import_jobs.id"))
     created_at = Column(DateTime, default=now)
     unit = relationship("Unit")
@@ -169,8 +171,9 @@ class ImportJob(Base):
     title = Column(String(200), default="")
     subject = Column(String(10), default="math")
     grade = Column(String(4))
-    problem_blob_id = Column(Integer, ForeignKey("blobs.id"))
-    answer_blob_id = Column(Integer, ForeignKey("blobs.id"))
+    blob_ids = Column(String(400), default="")     # 올린 원본 파일들 (문제·답지 섞여도 됨), "3,4"
+    filenames = Column(Text, default="")            # 같은 순서의 파일 이름, 줄바꿈 구분
+    report = Column(Text, default="")              # 등록 보고서 (빠진 번호, 짝 없는 답지 등)
     status = Column(String(10), default="queued")  # queued | working | done | error
     claimed_at = Column(DateTime)
     log = Column(Text, default="")

@@ -9,6 +9,8 @@
 <select name="unit"><option value="0">전체 단원</option>{% for un in units %}<option value="{{ un.id }}" {{ 'selected' if f.unit==un.id }}>{{ SUBJECTS[un.subject] }} {{ un.grade }} {{ un.name }}</option>{% endfor %}</select>
 <select name="diff"><option value="">전체 난이도</option>{% for d in DIFFS %}<option {{ 'selected' if f.diff==d }}>{{ d }}</option>{% endfor %}</select>
 <select name="status"><option value="">전체 상태</option><option value="draft" {{ 'selected' if f.status=='draft' }}>초안(검토 전)</option><option value="published" {{ 'selected' if f.status=='published' }}>출제 중</option></select>
+<label class="inline"><input type="checkbox" name="check" value="1" {{ 'checked' if f.check }}> 확인 필요만</label>
+{% if f.job %}<input type="hidden" name="job" value="{{ f.job }}">{% endif %}
 <button class="btn small">보기</button></form>
 <form method="post" action="/t/problems/bulk">
 <div class="row"><label><input type="checkbox" onclick="document.querySelectorAll('.pick').forEach(c=>c.checked=this.checked)"> 전체 선택</label>
@@ -21,6 +23,7 @@
 <a href="/t/problem/{{ p.id }}"><b>#{{ p.id }}</b> {{ diff_badge(p.difficulty) }} <span class="badge subj-{{ p.subject }}">{{ SUBJECTS[p.subject] }}</span> {{ p.unit.grade }} {{ p.unit.name }}
 {% if p.qtype != 'essay' %}<span class="muted small">{{ QTYPES[p.qtype] }}</span>{% endif %}
 {% if p.status=='draft' %}<span class="badge wait">초안</span>{% endif %}
+{% if p.review_note %}<span class="badge bad" title="{{ p.review_note }}">확인 필요</span>{% endif %}
 <div class="math clip">{{ p.body[:140] }}</div>
 {% if p.image_id %}<img class="mini" src="/blob/{{ p.image_id }}">{% endif %}
 <div class="muted">{{ p.source }}{% if not p.answer and not p.solution and not p.solution_image_id %} · <span class="neg">답지 없음</span>{% endif %}</div></a></div>

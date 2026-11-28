@@ -16,6 +16,7 @@
   <label>답 <input name="answer" value="{{ p.answer if p }}"></label>
   <label>풀이 (답지) <textarea name="solution" rows="6" class="live">{{ p.solution if p }}</textarea></label>
   <label>풀이 그림 <input type="file" name="sol_image" accept="image/*">{% if p and p.solution_image_id %}<label class="inline"><input type="checkbox" name="remove_sol_image" value="1"> 풀이 그림 지우기</label>{% endif %}</label>
+  <label>확인 메모 (자동 등록 때 남긴 것. 확인했으면 지우고 저장) <textarea name="review_note" rows="2">{{ p.review_note if p }}</textarea></label>
   <label>상태 <select name="status"><option value="draft" {{ 'selected' if not p or p.status=='draft' }}>초안 (학생에게 안 보임)</option><option value="published" {{ 'selected' if p and p.status=='published' }}>출제</option></select></label>
   <button class="btn big">저장</button>
 </form>
