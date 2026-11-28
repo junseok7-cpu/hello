@@ -247,6 +247,19 @@ function note(s, text) { s.addNotes(text); SCRIPT.push({ ...s._meta, text }); }
   SRC(s, '2025년 1~8월로 시작해 매달 다시 학습, 9~12월 시험. 대기 발전량 = 예측이 틀린 크기의 95% 지점. 실제 급전(발전기별 비용·제약)은 반영하지 않은 시제품');
   note(s, `이 계획이 얼마나 효율적인지 2025년 9월부터 12월까지 시험했습니다. 비교 대상은 지난주 같은 시각의 값을 그대로 쓰는 방법입니다. 수요 예측 오차가 ${f1(PD['지난주 같은 시각'].MAPE_pct)}%에서 ${f1(PD.AI.MAPE_pct)}%로 줄었습니다. 예측이 틀릴 때를 대비해 늘 대기시켜 둬야 하는 발전량은 ${num(PN['지난주 같은 시각'].reserve_P95_MW)} MW에서 ${num(PN.AI.reserve_P95_MW)} MW로 약 ${num(PL.reserve_saving_MW)} MW 줄었습니다. 대기하는 발전소가 줄면 그만큼 연료를 덜 쓰고 효율적으로 생산할 수 있습니다. 다만 태양광과 풍력은 아직 날씨 예보를 넣지 못해 지난주 값과 비슷했고, 날씨 자료를 넣는 것이 다음 단계입니다. 실제 발전소별 비용과 제약을 반영하지 않은 시제품이라는 점도 함께 말씀드립니다.`);
 
+  const PW = PL.with_weather;
+  const reserveWithoutWeather = PN.AI.reserve_P95_MW;
+  const reserveWithWeather = PW.net.AI.reserve_P95_MW;
+  s = slide('날씨를 넣으면 더 줄어든다', 4);
+  img(s, 'f29_plan_weather.png', 0.5, 1.0, 9.0, 3.0);
+  TX(s, bl([
+    `날씨를 넣었을 때 대기 발전량은 ${num(reserveWithoutWeather)} → ${num(reserveWithWeather)} MW`,
+    `발전량 오차는 태양광 ${PL.solar.AI_nMAE_pct}% → ${PW.solar.AI_nMAE_pct}%, 풍력 ${PL.wind.AI_nMAE_pct}% → ${PW.wind.AI_nMAE_pct}% (설비용량 대비)`,
+    '그 시각에 실제로 관측한 날씨라 실제 예보보다 좋은 참고값입니다.',
+  ]), { x: 0.5, y: 4.06, w: 9.0, h: 0.93, fontSize: 11.5 });
+  SRC(s, '자료 기상청 ASOS·한국전력거래소. 2025년 9~12월 같은 시간으로 비교');
+  note(s, `앞 슬라이드와 같은 시간에 날씨를 더해 비교했습니다. 태양광에는 햇빛의 양과 비친 시간, 구름의 양, 기온을 넣었습니다. 풍력에는 바람의 세기를 넣고, 냉방과 난방에 쓰이는 전기를 예측할 때는 기온과 습도를 넣었습니다. 왼쪽 막대는 예측이 빗나갈 때를 대비해 대기시킬 발전량입니다. 시험 시간의 95%에서 오차를 감당할 수 있는 크기로, 날씨 없이 계산하면 ${num(reserveWithoutWeather)} MW, 관측 날씨를 넣으면 ${num(reserveWithWeather)} MW였습니다. 오른쪽은 태양광과 풍력의 예측 오차를 각각의 설비용량으로 나눈 값입니다. 막대가 낮을수록 예측이 실제에 더 가까웠다는 뜻입니다. 이 실험은 전날 미리 알 수 없는 실제 관측 날씨를 썼습니다. 실제 예보보다 좋은 참고값으로 봐 주세요.`);
+
   s = slide('모델보다 먼저 한 일: 데이터 점검', 4);
   img(s, 'f4_normalize.png', 0.5, 1.0, 9.0, 2.6);
   TX(s, bl(['태양광 시도·시각 중복 66,976행 제거 (806,408 → 739,432행)', '관측 일사량이 계산값보다 큰 27,566건: 시각·단위 점검 후보로 표시',

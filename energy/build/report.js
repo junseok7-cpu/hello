@@ -284,12 +284,14 @@ push(H1('7. 이상탐지와 추종 분석'),
 );
 
 // ── 7-2. 사용량에 따른 발전 계획 AI (목표)
-const PLn = R.plan;
+const PLn = R.plan, PLw = PLn.with_weather;
 push(H2('7.8 사용량(수요)에 맞춘 발전 계획 AI'),
   P(`본 과제의 목표는 전기를 얼마나 쓸지(수요)를 미리 알고, 그에 맞춰 발전 계획을 세우고, 발전원별 발전량을 예측해 낭비 없이 생산하는 것이다. 2025년 시간별 전국 전력수요와 태양광·풍력 거래량으로 시제품을 만들었다. 전날 14시에 ① 내일 수요, ② 내일 태양광·풍력을 예측하고, ③ 수요에서 태양광·풍력을 뺀 순수요(나머지 발전소가 채울 양)를 구한 뒤, ④ 원자력(설비 ${PLn.plan.nuclear_basis.split(' ')[2]} MW × 2025 이용률 중앙값, 약 ${PLn.plan.nuclear_MW.toLocaleString()} MW로 가정)을 먼저 놓고 나머지를 출력을 조절할 수 있는 발전(석탄·LNG 등)으로 채운다. AI는 수요의 절대 크기 대신 "이틀 전 하루 평균 대비 비율"을 배우게 하고, 매달 그 전날까지의 자료로 다시 학습하였다(처음에 수요 자체를 1~8월 자료로 학습했을 때는 9~12월 수준을 맞추지 못해 기준보다 나빴다).`),
   P(`2025년 9~12월 시험에서 수요 예측 오차(평균 절대 백분율)는 지난주 같은 시각 값을 그대로 쓰는 방법 ${PLn.demand['지난주 같은 시각'].MAPE_pct}%에서 AI ${PLn.demand.AI.MAPE_pct}%로 줄었다. 예측이 틀릴 때를 대비해 대기해야 하는 발전량(시간의 95%를 버티는 크기)은 순수요 기준 ${PLn.net['지난주 같은 시각'].reserve_P95_MW.toLocaleString()} MW에서 ${PLn.net.AI.reserve_P95_MW.toLocaleString()} MW로 약 ${PLn.reserve_saving_MW.toLocaleString()} MW 줄었고, 실제보다 많이 준비한 전력량은 ${PLn.over_saving_GWh.toLocaleString()} GWh 줄었다. 태양광·풍력은 날씨 예보 없이 과거 값만 써서 기준과 비슷했다(태양광 설비용량 대비 오차 ${PLn.solar.AI_nMAE_pct}% vs ${PLn.solar['지난주_nMAE_pct']}%, 풍력 ${PLn.wind.AI_nMAE_pct}% vs ${PLn.wind['지난주_nMAE_pct']}%). 발전기별 비용·기동 제약을 반영하지 않은 시제품이며, 날씨 예보와 시간별 SMP를 넣는 것이 다음 단계다.`),
   ...FIG('f27_plan_day.png', `${PLn.example_day} 발전 계획(전날 14시 작성)과 순수요 예측`, 6.4),
   ...FIG('f28_plan_reserve.png', '예측이 틀릴 때를 대비해 대기할 발전량과 실제보다 많이 준비한 전력량', 6.0),
+  P(`관측 날씨를 넣은 참고 실험에서는 기상청 ASOS의 일사량·일조시간·전운량·기온을 태양광 예측에, 풍속을 풍력 예측에, 기온·습도를 수요 예측에 사용했다. 날씨 없이 학습한 AI와 관측 날씨를 쓴 AI를 2025년 9~12월 같은 ${PLw.test_hours.toLocaleString()}시간에서 비교했다. 대기 발전량(P95)은 ${PLn.net.AI.reserve_P95_MW.toLocaleString()} → ${PLw.net.AI.reserve_P95_MW.toLocaleString()} MW, 실제보다 많이 준비한 전력량은 ${PLn.net.AI.over_GWh.toLocaleString()} → ${PLw.net.AI.over_GWh.toLocaleString()} GWh였다. 수요의 평균 절대 백분율 오차는 ${PLn.demand.AI.MAPE_pct}% → ${PLw.demand.AI.MAPE_pct}%, 설비용량 대비 평균 절대 오차는 태양광 ${PLn.solar.AI_nMAE_pct}% → ${PLw.solar.AI_nMAE_pct}%, 풍력 ${PLn.wind.AI_nMAE_pct}% → ${PLw.wind.AI_nMAE_pct}%였다. ${PLw.caution}`),
+  ...FIG('f29_plan_weather.png', '관측 날씨 사용 여부에 따른 대기 발전량과 태양광·풍력 예측 오차', 6.4),
 );
 
 // ── 8. 공공데이터 50종으로 확인한 근거

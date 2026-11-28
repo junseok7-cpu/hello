@@ -2342,6 +2342,81 @@
     "under_GWh": 1151.9
    }
   },
+  "with_weather": {
+   "period_train": "2025-01-09부터 매달 직전까지 (매달 다시 학습)",
+   "period_test": "2025-09-01~2025-12-31",
+   "test_hours": 2928,
+   "demand": {
+    "AI": {
+     "MAE_MW": 2414,
+     "RMSE_MW": 3212,
+     "MAPE_pct": 3.82,
+     "reserve_P95_MW": 6816,
+     "over_GWh": 3710.7,
+     "under_GWh": 3356.8
+    },
+    "지난주 같은 시각": {
+     "MAE_MW": 3730,
+     "RMSE_MW": 5501,
+     "MAPE_pct": 6.03,
+     "reserve_P95_MW": 11879,
+     "over_GWh": 6217.8,
+     "under_GWh": 4703.1
+    }
+   },
+   "net": {
+    "AI": {
+     "MAE_MW": 2581,
+     "RMSE_MW": 3457,
+     "MAPE_pct": 4.23,
+     "reserve_P95_MW": 7284,
+     "over_GWh": 4015.0,
+     "under_GWh": 3541.2
+    },
+    "지난주 같은 시각": {
+     "MAE_MW": 3960,
+     "RMSE_MW": 5813,
+     "MAPE_pct": 6.65,
+     "reserve_P95_MW": 13102,
+     "over_GWh": 6550.3,
+     "under_GWh": 5044.0
+    }
+   },
+   "solar": {
+    "AI_nMAE_pct": 2.53,
+    "지난주_nMAE_pct": 4.24
+   },
+   "wind": {
+    "AI_nMAE_pct": 10.11,
+    "지난주_nMAE_pct": 12.4
+   },
+   "reserve_saving_MW": 5818,
+   "over_saving_GWh": 2535.3,
+   "net_offday": {
+    "AI": {
+     "MAE_MW": 2490,
+     "RMSE_MW": 3424,
+     "MAPE_pct": 4.67,
+     "reserve_P95_MW": 7449,
+     "over_GWh": 1575.5,
+     "under_GWh": 814.4
+    },
+    "지난주 같은 시각": {
+     "MAE_MW": 4353,
+     "RMSE_MW": 6195,
+     "MAPE_pct": 8.37,
+     "reserve_P95_MW": 14241,
+     "over_GWh": 3026.9,
+     "under_GWh": 1151.9
+    }
+   },
+   "alignment": {
+    "shift_hours": -1,
+    "solar_irradiance_corr_unshifted": 0.946,
+    "solar_irradiance_corr_minus_1h": 0.9636
+   },
+   "caution": "예측 대상 시각의 기상청 실제 관측 날씨를 넣은 참고 상한이다. 전날에는 이 관측값을 알 수 없으며 실제 예보에는 오차가 있다."
+  },
   "plan": {
    "nuclear_MW": 22403,
    "nuclear_basis": "원자력 설비 26,050 MW × 2025 이용률 중앙값 86.0% (가정)",
