@@ -19,7 +19,10 @@ def _client(endpoint, key_id, secret, region):
 
     return boto3.client("s3", endpoint_url=endpoint, aws_access_key_id=key_id,
                         aws_secret_access_key=secret, region_name=region,
-                        config=Config(signature_version="s3v4"))
+                        config=Config(signature_version="s3v4",
+                                  # B2는 boto3 1.36+ 기본 체크섬(aws-chunked) 업로드를 받지 않는다
+                                  request_checksum_calculation="when_required",
+                                  response_checksum_validation="when_required"))
 
 
 def object_store(required=False):
