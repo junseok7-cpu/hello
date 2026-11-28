@@ -1042,7 +1042,7 @@
    "11": 76.2,
    "12": 82.8
   },
-  "note": "supply_daily_2025.csv 없음 — 이전 실행 값 유지"
+  "note": "supply_daily_2025.csv: 사용자 제공 energy_data_lite.xlsx의 공급능력_2025 시트(EPSIS 자료)로 재계산해 기존 값과 일치 확인(2026-11-28)"
  },
  "fig_days": {
   "good": "2024-10-11",
