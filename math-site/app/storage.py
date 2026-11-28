@@ -33,8 +33,20 @@ def _client(endpoint, key_id, secret, region):
     return client
 
 
+def _env(name):
+    """붙여넣기 때 섞인 공백·줄바꿈·따옴표를 지운다."""
+    return (os.getenv(name) or "").strip().strip("'\"").strip()
+
+
+def key_id_hint():
+    """오류 진단용: 키 ID 의 글자 수와 앞 3글자만 (비밀키는 절대 포함하지 않음)."""
+    raw = os.getenv("S3_KEY_ID") or ""
+    k = _env("S3_KEY_ID")
+    return {"key_id_len": len(k), "key_id_prefix": k[:3], "had_spaces": raw != k}
+
+
 def object_store(required=False):
-    endpoint, bucket, key_id, secret = (os.getenv(name) for name in
+    endpoint, bucket, key_id, secret = (_env(name) for name in
                                         ("S3_ENDPOINT", "S3_BUCKET", "S3_KEY_ID", "S3_SECRET"))
     if all((endpoint, bucket, key_id, secret)):
         host = urlsplit(endpoint).hostname or ""

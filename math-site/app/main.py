@@ -908,7 +908,11 @@ async def _grader_errors(request: Request, call_next):
             logging.getLogger("uvicorn.error").error("grader API error\n%s", traceback.format_exc())
             tok = request.headers.get("X-Grader-Token", "").encode()
             if hmac.compare_digest(tok, GRADER_TOKEN.encode()):
-                return JSONResponse({"error": type(e).__name__, "detail": str(e)[:500]}, status_code=500)
+                body = {"error": type(e).__name__, "detail": str(e)[:500]}
+                if "AccessKey" in str(e):
+                    from .storage import key_id_hint
+                    body["hint"] = key_id_hint()
+                return JSONResponse(body, status_code=500)
         raise
 
 
