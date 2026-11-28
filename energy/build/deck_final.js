@@ -260,6 +260,20 @@ function note(s, text) { s.addNotes(text); SCRIPT.push({ ...s._meta, text }); }
   SRC(s, '자료 기상청 ASOS·한국전력거래소. 2025년 9~12월 같은 시간으로 비교');
   note(s, `앞 슬라이드와 같은 시간에 날씨를 더해 비교했습니다. 태양광에는 햇빛의 양과 비친 시간, 구름의 양, 기온을 넣었습니다. 풍력에는 바람의 세기를 넣고, 냉방과 난방에 쓰이는 전기를 예측할 때는 기온과 습도를 넣었습니다. 왼쪽 막대는 예측이 빗나갈 때를 대비해 대기시킬 발전량입니다. 시험 시간의 95%에서 오차를 감당할 수 있는 크기로, 날씨 없이 계산하면 ${num(reserveWithoutWeather)} MW, 관측 날씨를 넣으면 ${num(reserveWithWeather)} MW였습니다. 오른쪽은 태양광과 풍력의 예측 오차를 각각의 설비용량으로 나눈 값입니다. 막대가 낮을수록 예측이 실제에 더 가까웠다는 뜻입니다. 이 실험은 전날 미리 알 수 없는 실제 관측 날씨를 썼습니다. 실제 예보보다 좋은 참고값으로 봐 주세요.`);
 
+  const PF = PL.forecast_sample;
+  const { no_weather: FN, observed: FOB, forecast: FF } = PF.conditions;
+  const pct2 = (v) => v.toFixed(2);
+  s = slide('실제 예보를 넣으면?', 4);
+  img(s, 'f30_plan_forecast.png', 0.5, 1.02, 6.4, 2.55);
+  card(s, 7.0, 1.36, 2.5, 1.45, `${num(FF.net_reserve_P95_MW)} MW`, '실제 예보로 계산한 대기 발전량');
+  TX(s, bl([
+    '전날 오후 2시 기상청 예보로 다음 날 발전량을 맞혀 봤어요.',
+    `관측 날씨 → 실제 예보로 바꾸니 풍력 오차는 ${pct2(FOB.wind_nMAE_pct)}% → ${pct2(FF.wind_nMAE_pct)}%.`,
+    `전기 사용량 오차는 ${pct2(FOB.demand_MAPE_pct)}% → ${pct2(FF.demand_MAPE_pct)}%. 낮 시간 2주만 비교했어요.`,
+  ]), { x: 0.5, y: 3.62, w: 9.0, h: 1.13, fontSize: 12 });
+  SRC(s, `자료 기상청 단기예보·ASOS, 전력거래소. 2025년 11월 17~30일 07~18시, ${PF.test_hours}시간`);
+  note(s, `이번에는 전날 오후 두 시에 받은 기상청 예보로 다음 날을 맞혀 봤습니다. 예보에서 구할 수 있는 기온, 습도, 바람 세기, 구름 정보로 모델을 학습했습니다. 같은 모델에 관측 날씨와 실제 예보를 번갈아 넣고, 날씨 없이 내놓은 예측과도 비교했습니다. 막대가 낮을수록 실제 발전량에 가깝습니다. 풍력 오차는 관측 날씨에서 ${pct2(FOB.wind_nMAE_pct)}%, 예보에서 ${pct2(FF.wind_nMAE_pct)}%였습니다. 예측이 빗나갈 때를 대비해 대기할 발전량은 날씨 없이 ${num(FN.net_reserve_P95_MW)} MW, 관측 날씨로 ${num(FOB.net_reserve_P95_MW)} MW, 예보로 ${num(FF.net_reserve_P95_MW)} MW였습니다. 11월 낮 시간만 본 2주 표본이라 참고값으로 봐 주세요.`);
+
   s = slide('모델보다 먼저 한 일: 데이터 점검', 4);
   img(s, 'f4_normalize.png', 0.5, 1.0, 9.0, 2.6);
   TX(s, bl(['태양광 시도·시각 중복 66,976행 제거 (806,408 → 739,432행)', '관측 일사량이 계산값보다 큰 27,566건: 시각·단위 점검 후보로 표시',

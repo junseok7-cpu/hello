@@ -2427,6 +2427,89 @@
   "smp_2025_mean_won_per_kWh": 119.1,
   "over_saving_value_100M_won": 2942.0,
   "caution": "날씨 예보 없이 과거 값·요일·공휴일만 쓴 시제품. 태양광·풍력은 시장 거래분만 포함(자가소비 등 제외). 원자력 기저량은 이용률 중앙값을 쓴 가정이며 실제 급전 계획(발전기별 비용·제약)은 반영하지 않음. 돈 환산은 SMP 단순평균을 곱한 참고값.",
-  "example_day": "2025-09-08"
+  "example_day": "2025-09-08",
+  "forecast_sample": {
+   "period_test": "2025-11-17~2025-11-30, 07~18시 KST",
+   "sample_weeks": 2,
+   "target_hours": 168,
+   "test_hours": 168,
+   "missing_file_count": 7,
+   "missing_files": [
+    "SKY_2025111614_2025111711.txt.gz",
+    "TMP_2025111614_2025111711.txt.gz",
+    "SKY_2025111614_2025111714.txt.gz",
+    "TMP_2025111714_2025111809.txt.gz",
+    "SKY_2025111714_2025111810.txt.gz",
+    "REH_2025111714_2025111812.txt.gz",
+    "WSD_2025112214_2025112317.txt.gz"
+   ],
+   "missing_policy": "누락된 예보 항목은 NaN으로 유지하여 LightGBM이 처리",
+   "alignment": {
+    "observed_shift_hours": -1,
+    "forecast_tmef_shift_hours": 0
+   },
+   "conditions": {
+    "no_weather": {
+     "demand_MAPE_pct": 4.88,
+     "net_reserve_P95_MW": 8551,
+     "solar_nMAE_pct": 5.5,
+     "wind_nMAE_pct": 18.16
+    },
+    "observed": {
+     "demand_MAPE_pct": 4.44,
+     "net_reserve_P95_MW": 7988,
+     "solar_nMAE_pct": 5.76,
+     "wind_nMAE_pct": 16.93
+    },
+    "forecast": {
+     "demand_MAPE_pct": 4.25,
+     "net_reserve_P95_MW": 8626,
+     "solar_nMAE_pct": 5.74,
+     "wind_nMAE_pct": 19.95
+    }
+   },
+   "grid_validation": {
+    "order": "ny 바깥, nx 안쪽",
+    "same_time_TMP_vs_ASOS": {
+     "부산": {
+      "nx": 98,
+      "ny": 76,
+      "ny_outer": {
+       "pairs": 166,
+       "MAE_C": 1.79
+      },
+      "nx_outer": {
+       "pairs": 166,
+       "MAE_C": 7.71
+      }
+     },
+     "서울": {
+      "nx": 60,
+      "ny": 127,
+      "ny_outer": {
+       "pairs": 166,
+       "MAE_C": 1.27
+      },
+      "nx_outer": {
+       "pairs": 0,
+       "MAE_C": null
+      }
+     },
+     "제주": {
+      "nx": 52,
+      "ny": 38,
+      "ny_outer": {
+       "pairs": 166,
+       "MAE_C": 0.94
+      },
+      "nx_outer": {
+       "pairs": 0,
+       "MAE_C": null
+      }
+     }
+    }
+   },
+   "caution": "11월 낮 시간 2주 표본이라 참고값이다."
+  }
  }
 }
