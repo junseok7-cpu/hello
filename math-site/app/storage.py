@@ -17,12 +17,19 @@ def _client(endpoint, key_id, secret, region):
     import boto3
     from botocore.config import Config
 
-    return boto3.client("s3", endpoint_url=endpoint, aws_access_key_id=key_id,
+    client = boto3.client("s3", endpoint_url=endpoint, aws_access_key_id=key_id,
                         aws_secret_access_key=secret, region_name=region,
                         config=Config(signature_version="s3v4",
                                   # B2는 boto3 1.36+ 기본 체크섬(aws-chunked) 업로드를 받지 않는다
                                   request_checksum_calculation="when_required",
                                   response_checksum_validation="when_required"))
+
+    # B2는 "Expect: 100-continue" 요청에 응답하지 않고 연결을 끊는다 → 보내기 직전에 뺀다
+    def _drop_expect(request, **_):
+        request.headers.pop("Expect", None)
+
+    client.meta.events.register_first("before-send.s3.*", _drop_expect)
+    return client
 
 
 def object_store(required=False):
