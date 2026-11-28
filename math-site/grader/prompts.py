@@ -162,3 +162,20 @@ ANALYZE_PAGE = """너는 {subject_name} 문제집·답지를 문제 단위로 �
 아래 JSON 하나만 출력한다.
 {{"page_type": "problems|answers|mixed|other", "problems": [{{"section": "", "number": "", "body": "", "qtype": "essay", "unit_id": 0, "difficulty": "중", "has_figure": false, {figure_field} "unclear": ""}}], "answers": [{{"section": "", "number": "", "answer": "", "solution": ""}}]}}
 """
+
+
+SOLVE = """다음 문제를 풀어 JSON으로 답하라. 첨부 그림이 있으면 함께 참고하라.
+과목: {subject}
+학년: {grade}
+단원: {unit}
+문제 유형: {qtype}
+본문: {body}
+답지 답: {answer}
+
+학생 학년 수준의 정석 풀이를 단계별로 쓰고, 수식은 LaTeX $...$로 감싸라.
+과학 객관식은 각 선지가 옳거나 그른 이유를 모두 설명하라.
+답지 답이 있으면 그 답에 맞는 풀이를 쓰되, 독립적으로 계산한 답을 answer에 적어라.
+계산한 답이 답지와 다르면 억지로 맞추지 말고 이유를 note에 적어라.
+출력은 JSON만. 확실하지 않은 점이 없으면 note는 빈 문자열로 둔다.
+{{"answer": "...", "solution": "...", "confidence": "high|medium|low", "note": "확실하지 않은 점"}}
+"""

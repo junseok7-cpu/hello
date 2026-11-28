@@ -787,6 +787,15 @@ def g_units(grade: str = "", subject: str = "", db=Depends(get_db)):
             for x in q.order_by(Unit.subject, Unit.grade, Unit.order)]
 
 
+@app.get("/api/grader/problems", dependencies=[Depends(grader)])
+def g_problems(subject: str, grade: str, db=Depends(get_db)):
+    rows = (db.query(Problem.id, Problem.body, Problem.source, Problem.image_id)
+            .join(Unit).filter(Unit.subject == subject, Unit.grade == grade,
+                               Problem.status.in_(("draft", "published"))).order_by(Problem.id))
+    return [dict(id=p.id, body=p.body or "", source=p.source or "", has_image=p.image_id is not None)
+            for p in rows]
+
+
 @app.post("/api/grader/problem", dependencies=[Depends(grader)])
 async def g_problem(unit_id: int = Form(...), difficulty: str = Form(...), body: str = Form(""),
                     qtype: str = Form("essay"), review_note: str = Form(""), image_kind: str = Form("figure"),

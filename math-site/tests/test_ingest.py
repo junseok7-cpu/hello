@@ -159,3 +159,119 @@ def test_pdf_continuation_uses_previous_tail_and_stacks_crops(tmp_path, monkeypa
     im = Image.open(io.BytesIO(items[0]["image"]))
     assert im.size == (12, 50)
     assert im.getpixel((0, 0)) == (255, 0, 0) and im.getpixel((0, 49)) == (0, 0, 255)
+
+
+def test_process_filters_duplicates_and_moves_answer(tmp_path, monkeypatch):
+    import ingest
+
+    page = docread.Page(no=1, source="교재.hwp", text="본문")
+    monkeypatch.setattr(docread, "read_any", lambda *args: ([page], {}))
+    body = "abcdefghijklmnopqrst"
+    problems = [
+        dict(number="1", body=r"① $X\,\;\!\quad Y$⟦hwp:원본⟧.", unit_id=1),
+        dict(number="2", body="① $xy$！", unit_id=1),
+        dict(number="3", body="② $xy$", unit_id=1),
+        dict(number="4", body="사이트에 있는 문제.", unit_id=1),
+        dict(number="5", body=body, unit_id=1),
+        dict(number="6", body=body[:-2] + "ZZ", unit_id=1),
+    ]
+    answers = [dict(number=str(n), answer="정답", solution="답지 풀이") for n in (2, 3, 5, 6)]
+    existing = [dict(id=42, body="사이트에 있는 문제", source="기존 교재", has_image=False),
+                dict(id=43, body=body[:-2] + "QQ", source="다른 교재", has_image=False)]
+
+    def ask(engine, prompt, images, workdir):
+        assert "학생 학년 수준의 정석 풀이" not in prompt
+        return dict(problems=problems, answers=answers)
+
+    monkeypatch.setattr(ingest.engines, "ask", ask)
+    items, report = ingest.process(["교재.hwp"], "math", "중1", "교재",
+                                   [{"id": 1, "name": "단원"}], "codex", str(tmp_path), existing=existing)
+    assert [item["source"].split("#")[-1] for item in items] == ["1", "3", "5", "6"]
+    assert (items[0]["answer"], items[0]["solution"]) == ("정답", "답지 풀이")
+    assert "답지 없음" not in items[0]["review_note"]
+    assert "중복 의심: 기존 #43 (다른 교재)" in items[2]["review_note"]
+    assert "중복으로 건너뜀 2개" in report
+    assert "#2 → 같은 묶음의 교재 · 교재.hwp 조각1 #1" in report
+    assert "#4 → 기존 #42" in report
+    assert "중복 의심 2개" in report
+
+
+def test_process_image_duplicate_rules_and_hwp_solve(tmp_path, monkeypatch):
+    import ingest
+    from PIL import Image
+
+    figure = tmp_path / "figure.png"
+    Image.new("RGB", (10, 10), "red").save(figure)
+    page = docread.Page(no=1, source="교재.hwp", text="본문", figures={"그림1": str(figure)})
+    monkeypatch.setattr(docread, "read_any", lambda *args: ([page], {}))
+    short = "다음 그림의 넓이를 구하시오"
+    long = "밑변이 길고 높이가 다른 두 삼각형의 넓이를 각각 구하고 두 넓이의 차이를 계산하시오"
+    problems = [
+        dict(number=str(n), body=body, unit_id=1, qtype="mc_right",
+             has_figure=n != 5, figures=["그림1"] if n != 5 else [])
+        for n, body in enumerate([short, short, long, long, long], 1)
+    ]
+    answers = [dict(number="2", answer="①"), dict(number="3", solution="답지 풀이"),
+               dict(number="5", answer="③", solution="답지 풀이")]
+    attachments = []
+
+    def ask(engine, prompt, images, workdir):
+        if "학생 학년 수준의 정석 풀이" not in prompt:
+            return dict(problems=problems, answers=answers)
+        assert engine == "codex"
+        for value in ("과학", "중1", "단원", "mc_right", short, "각 선지"):
+            assert value in prompt
+        path, = images
+        assert path != str(figure)
+        with Image.open(path) as image:
+            assert image.getpixel((0, 0)) == (255, 0, 0)
+        attachments.append(path)
+        if "답지 답: ①" in prompt:
+            return dict(answer="②", solution="선지를 확인한다.", confidence="low", note="그림 확인")
+        return dict(answer="①", solution="$1+1=2$", confidence="high", note="")
+
+    monkeypatch.setattr(ingest.engines, "ask", ask)
+    items, report = ingest.process(["교재.hwp"], "science", "중1", "교재",
+                                   [{"id": 1, "name": "단원"}], "codex", str(tmp_path))
+    assert [item["source"].split("#")[-1] for item in items] == ["1", "2", "3", "5"]
+    assert (items[0]["answer"], items[0]["solution"]) == ("①", "[AI 풀이] $1+1=2$")
+    assert "답지 없음 → AI 풀이 (확인 필요)" in items[0]["review_note"]
+    assert items[1]["answer"] == "①"
+    for note in ("중복 의심: 같은 묶음의", "AI 답과 답지 답이 다름: AI=②, 답지=①",
+                 "AI 풀이 확신 낮음", "그림 확인"):
+        assert note in items[1]["review_note"]
+    assert items[2]["solution"] == "답지 풀이"
+    assert "중복 의심: 같은 묶음의" in items[3]["review_note"]
+    assert len(attachments) == 2 and not any(os.path.exists(path) for path in attachments)
+    assert "중복으로 건너뜀 1개" in report and "중복 의심 2개" in report
+    assert "AI가 푼 문제 2개 (확인 필요)" in report
+
+
+def test_process_pdf_solve_failure_continues(tmp_path, monkeypatch):
+    import ingest
+
+    page = docread.Page(no=1, source="교재.pdf", text="본문", image="p.png", pdf=("교재.pdf", 0))
+    monkeypatch.setattr(docread, "read_any", lambda *args: ([page], {}))
+    monkeypatch.setattr(docread, "crop_pdf", lambda *args: b"cropped")
+
+    def ask(engine, prompt, images, workdir):
+        if "학생 학년 수준의 정석 풀이" not in prompt:
+            return {"problems": [
+                dict(number="1", body="그림의 넓이", unit_id=1, has_figure=True, bbox=[0, 0, 90, 90]),
+                dict(number="2", body="계산 문제", unit_id=1),
+            ]}
+        if "그림의 넓이" in prompt:
+            path, = images
+            with open(path, "rb") as f:
+                assert f.read() == b"cropped"
+            raise ingest.engines.EngineError("시간 초과")
+        assert images == []
+        return dict(answer="7", solution="계산한다.", confidence="medium", note="")
+
+    monkeypatch.setattr(ingest.engines, "ask", ask)
+    items, report = ingest.process(["교재.pdf"], "math", "중1", "교재",
+                                   [{"id": 1, "name": "단원"}], "codex", str(tmp_path))
+    assert items[0]["answer"] == items[0]["solution"] == ""
+    assert "AI 풀이 실패: 시간 초과" in items[0]["review_note"]
+    assert items[1]["answer"] == "7"
+    assert "AI가 푼 문제 1개 (확인 필요)" in report

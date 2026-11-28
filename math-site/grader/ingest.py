@@ -6,7 +6,10 @@ import io
 import os
 import re
 import sys
+import tempfile
+import unicodedata
 from collections import defaultdict
+from difflib import SequenceMatcher
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import docread  # noqa: E402
@@ -114,7 +117,80 @@ def _gaps(nums):
     return [n for n in range(ints[0], ints[-1] + 1) if n not in have]
 
 
-def process(files, subject, grade, title, units, engine, workdir, log=print):
+def _norm_body(body):
+    body = re.sub(r"⟦hwp:.*?⟧", "", body, flags=re.S)
+    body = re.sub(r"\\(?:[,;!: ]|(?:quad|qquad|enspace|thinspace|medspace|thickspace|negthinspace)\b)", "", body)
+    return "".join(c for c in body.lower()
+                   if not c.isspace() and not unicodedata.category(c).startswith("P"))
+
+
+def _add_note(item, note):
+    item["review_note"] = " / ".join(filter(None, (item["review_note"], note)))
+
+
+def _deduplicate(items, existing):
+    candidates = [(_norm_body(p["body"]), p["has_image"],
+                   f"기존 #{p['id']}" + (f" ({p['source']})" if p["source"] else ""), None)
+                  for p in existing]
+    kept, skipped = [], []
+    suspected = 0
+    for item in items:
+        body, has_image = _norm_body(item["body"]), bool(item["image"])
+        suspect = None
+        for other, other_image, label, first in candidates:
+            if body == other and has_image == other_image and (not has_image or len(body) >= 30):
+                skipped.append(f"{item['source']} → {label}")
+                if first is not None and not (first["answer"] or first["solution"]):
+                    first["answer"], first["solution"] = item["answer"], item["solution"]
+                break
+            if suspect is None and 20 * min(len(body), len(other)) >= 9 * (len(body) + len(other)):
+                if SequenceMatcher(None, other, body, autojunk=False).ratio() >= 0.90:
+                    suspect = label
+        else:
+            if suspect is not None:
+                _add_note(item, f"중복 의심: {suspect}")
+                suspected += 1
+            kept.append(item)
+            candidates.append((body, has_image, f"같은 묶음의 {item['source']}", item))
+    return kept, skipped, suspected
+
+
+def _solve(item, engine, workdir):
+    given = item["answer"]
+    prompt = prompts.SOLVE.format(
+        subject=SUBJECT_NAMES.get(item["subject"], "수학"), grade=item["grade"], unit=item["unit"],
+        qtype=item["qtype"], body=item["body"], answer=given or "(없음)")
+    try:
+        images = []
+        if item["image"]:
+            with tempfile.NamedTemporaryFile(dir=workdir, suffix=".png", delete=False) as f:
+                images.append(f.name)
+                f.write(item["image"])
+        result = engines.ask(engine, prompt, images, workdir)
+        answer = result["answer"].strip()
+        solution = result["solution"].strip()
+        if not answer or not solution:
+            raise ValueError("AI 답 또는 풀이가 비어 있음")
+    except Exception as e:
+        _add_note(item, f"AI 풀이 실패: {e}")
+        return False
+    finally:
+        for path in images:
+            os.unlink(path)
+
+    item["answer"] = given or answer
+    item["solution"] = "[AI 풀이] " + solution
+    _add_note(item, "답지 없음 → AI 풀이 (확인 필요)")
+    if given and re.sub(r"[\s$]", "", given) != re.sub(r"[\s$]", "", answer):
+        _add_note(item, f"AI 답과 답지 답이 다름: AI={answer}, 답지={given}")
+    if result.get("confidence") == "low":
+        _add_note(item, "AI 풀이 확신 낮음")
+    if result.get("note"):
+        _add_note(item, str(result["note"]))
+    return True
+
+
+def process(files, subject, grade, title, units, engine, workdir, log=print, existing=()):
     """files: 로컬 파일 경로 목록 (문제·답지 섞여도 됨). units: [{'id','name'}]
     반환: (items, report_text). item 마다 image(bytes|None), review_note 포함."""
     ctx = dict(subject=subject, grade=grade, title=title,
@@ -170,11 +246,10 @@ def process(files, subject, grade, title, units, engine, workdir, log=print):
     for q in problems:
         page = q["_page"]
         a = q.get("_answer") or {}
+        answer = a.get("answer") or ""
         rn = list(q.get("_notes", []))
         if "[도형:" in q.get("body", ""):
             rn.append("한글 도형 개체가 있어 그림이 빠졌을 수 있음 — 원본 확인")
-        if not a:
-            rn.append("답지 없음")
         if q.get("unclear"):
             rn.append("AI가 확실히 못 읽은 부분: " + str(q["unclear"]))
         image, image_kind = None, "figure"
@@ -201,17 +276,25 @@ def process(files, subject, grade, title, units, engine, workdir, log=print):
             difficulty=diff, qtype=q.get("qtype") if q.get("qtype") in QTYPES else "essay",
             body=re.sub(r"\[그림 ?\d+\]", "(아래 그림)", re.sub(r"⟦hwp:.*?⟧", "", q.get("body", ""))).strip(),
             image_kind=image_kind,
-            answer=a.get("answer", ""), solution=re.sub(r"⟦hwp:.*?⟧", "", a.get("solution", "")),
+            answer=answer if answer.strip() else "",
+            solution=re.sub(r"⟦hwp:.*?⟧", "", a.get("solution") or "").strip(),
             source=f"{title} · {page.source} {where}{sec} #{q.get('number', '')}",
             image=image, review_note=" / ".join(rn)))
+
+    items, skipped, suspected = _deduplicate(items, existing)
+    paired = sum(bool(i["answer"] or i["solution"]) for i in items)
+    solved = sum(_solve(i, engine, workdir) for i in items if not i["solution"])
 
     # 확인 보고서
     by_sec = defaultdict(list)
     for q in problems:
         by_sec[_norm_sec(q.get("section"))].append(_norm_num(q.get("number")))
     lines = [f"# 등록 보고서: {title} ({SUBJECT_NAMES.get(subject)} {grade})", "",
-             f"- 문제 {len(items)}개 · 답지 연결 {sum(1 for q in problems if q.get('_answer'))}개 · "
+             f"- 문제 {len(items)}개 · 답지 연결 {paired}개 · "
              f"짝 없는 답지 {len(leftover)}개 · 확인 필요 {sum(1 for i in items if i['review_note'])}개", ""]
+    lines += [f"- 중복으로 건너뜀 {len(skipped)}개"]
+    lines += [f"  - {s}" for s in skipped]
+    lines += [f"- 중복 의심 {suspected}개", f"- AI가 푼 문제 {solved}개 (확인 필요)"]
     lines += [f"- {s}" for s in stats]
     for sec, nums in by_sec.items():
         g = _gaps(nums)

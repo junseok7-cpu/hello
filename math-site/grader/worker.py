@@ -10,6 +10,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -138,6 +139,12 @@ def write_report(site: Site, job: dict):
 
 # ------------------------------------------------------------------ 문제집 등록 (PDF/HWP/HWPX)
 
+def fetch_problems(client, subject, grade):
+    response = client.get("/api/grader/problems", params={"subject": subject, "grade": grade})
+    response.raise_for_status()
+    return response.json()
+
+
 def do_import(site: Site, job: dict, engine=None, log=print):
     import ingest
     engine = engine or job["engine"]
@@ -153,9 +160,11 @@ def do_import(site: Site, job: dict, engine=None, log=print):
         for i, f in enumerate(job["files"]):
             name = f"{i + 1:02d}_" + os.path.basename(f["name"] or f"file{i}.pdf")
             paths.append(site.blob(f["blob_id"], os.path.join(wd, name)))
-        items, report = ingest.process(paths, job.get("subject", "math"), job["grade"], job["title"],
-                                       job["units"], engine, wd, log=note)
-        if not items:
+        subject = job.get("subject", "math")
+        existing = fetch_problems(site.c, subject, job["grade"])
+        items, report = ingest.process(paths, subject, job["grade"], job["title"],
+                                       job["units"], engine, wd, log=note, existing=existing)
+        if not items and not re.search(r"^- 중복으로 건너뜀 [1-9][0-9]*개$", report, re.M):
             site.c.post(f"/api/grader/import/{job['job_id']}",
                         json={"log": "등록할 문제가 없어요", "report": report, "error": True}).raise_for_status()
             return

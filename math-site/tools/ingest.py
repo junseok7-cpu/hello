@@ -33,16 +33,20 @@ def main():
     ap.add_argument("--subject", choices=["math", "science"], required=True)
     ap.add_argument("--grade", required=True)
     ap.add_argument("--title", required=True)
-    ap.add_argument("--engine", default="claude", choices=["claude", "codex"])
+    ap.add_argument("--engine", default="codex", choices=["claude", "codex"])
     ap.add_argument("--upload", action="store_true")
     a = ap.parse_args()
 
+    existing = []
     if a.upload:
         import httpx
-        from worker import load_config
+        from worker import fetch_problems, load_config
         url, tok = load_config()
-        c = httpx.Client(base_url=url, headers={"X-Grader-Token": tok}, timeout=60)
-        units = [u for u in c.get("/api/grader/units", params={"grade": a.grade, "subject": a.subject}).json()]
+        with httpx.Client(base_url=url, headers={"X-Grader-Token": tok}, timeout=60) as c:
+            response = c.get("/api/grader/units", params={"grade": a.grade, "subject": a.subject})
+            response.raise_for_status()
+            units = response.json()
+            existing = fetch_problems(c, a.subject, a.grade)
     else:
         units = local_units(a.subject, a.grade)
     if not units:
@@ -52,7 +56,7 @@ def main():
     os.makedirs(os.path.join(out, "img"), exist_ok=True)
     wd = engines.new_workdir()
     try:
-        items, report = ingest.process(a.files, a.subject, a.grade, a.title, units, a.engine, wd)
+        items, report = ingest.process(a.files, a.subject, a.grade, a.title, units, a.engine, wd, existing=existing)
     finally:
         shutil.rmtree(wd, ignore_errors=True)
     rows = []

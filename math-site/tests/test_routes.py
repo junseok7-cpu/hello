@@ -199,3 +199,23 @@ def test_full_image_exposes_problem_text(db, client):
     p.image_id, p.image_kind, p.body = 999, "full", "본문 검증"
     html = c.get(f"/s/p/{p.id}").text
     assert html.index('src="/blob/999"') < html.index("<summary>글로 보기</summary>") < html.index("본문 검증")
+
+
+def test_grader_problems_requires_token_and_filters_by_subject_grade(db, client):
+    c, _ = client
+    published = prob(db, "중1", "하")
+    draft = prob(db, "중1", "중", i=1)
+    image = D.Blob(data=b"image")
+    db.add(image)
+    db.flush()
+    draft.status, draft.image_id, draft.source = "draft", image.id, "교재"
+    prob(db, "중2", "하")
+    prob(db, "중1", "하", subject="science")
+    url = "/api/grader/problems?subject=math&grade=중1"
+    assert c.get(url).status_code == 401
+    response = c.get(url, headers=auth())
+    assert response.status_code == 200
+    assert response.json() == [
+        dict(id=published.id, body="x", source="", has_image=False),
+        dict(id=draft.id, body="x", source="교재", has_image=True),
+    ]

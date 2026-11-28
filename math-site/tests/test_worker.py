@@ -61,13 +61,22 @@ def test_import_resets_first_and_reports_empty_output(worker, monkeypatch, tmp_p
         posts.append((url, kwargs.get("json")))
         return SimpleNamespace(raise_for_status=lambda: None)
 
+    existing = [dict(id=1, body="기존 문제", source="교재", has_image=False)]
+
+    def get(url, *, params):
+        assert posts == [("/api/grader/import/3/reset", None)]
+        assert url == "/api/grader/problems"
+        assert params == {"subject": "math", "grade": "중1"}
+        return httpx.Response(200, json=existing, request=httpx.Request("GET", "http://test" + url))
+
     def process(*args, **kwargs):
         assert posts == [("/api/grader/import/3/reset", None)]
+        assert kwargs["existing"] == existing
         return [], "분석 보고서"
 
     monkeypatch.setattr(ingest, "process", process)
     monkeypatch.setattr(worker.engines, "new_workdir", lambda: str(tmp_path / "import"))
-    worker.do_import(SimpleNamespace(c=SimpleNamespace(post=post)),
+    worker.do_import(SimpleNamespace(c=SimpleNamespace(post=post, get=get)),
                      dict(job_id=3, files=[], grade="중1", title="교재", units=[], engine="codex"))
     assert posts[1][0] == "/api/grader/import/3"
     assert posts[1][1]["error"] and posts[1][1]["report"] == "분석 보고서"
@@ -106,3 +115,62 @@ def test_bundle_requests_skip_if_source_exists(worker, monkeypatch, tmp_path):
     ))
     upload.main()
     assert sent == [("/api/grader/problem", "교재 1번", 1)]
+
+
+def test_import_finishes_when_every_problem_is_a_duplicate(worker, monkeypatch, tmp_path):
+    import ingest
+
+    posts = []
+
+    def post(url, *, json=None):
+        posts.append((url, json))
+        return httpx.Response(200, request=httpx.Request("POST", "http://test" + url))
+
+    report = "# 등록 보고서\n- 중복으로 건너뜀 1개\n  - 새 교재 → 기존 #1"
+    monkeypatch.setattr(ingest, "process", lambda *args, **kwargs: ([], report))
+    monkeypatch.setattr(worker, "fetch_problems", lambda *args: [])
+    monkeypatch.setattr(worker.engines, "new_workdir", lambda: str(tmp_path / "import"))
+    worker.do_import(SimpleNamespace(c=SimpleNamespace(post=post)),
+                     dict(job_id=3, files=[], grade="중1", title="교재", units=[], engine="codex"))
+    assert len(posts) == 2
+    assert posts[-1][1]["report"] == report
+    assert not posts[-1][1].get("error")
+
+
+@pytest.mark.parametrize("upload", [False, True])
+def test_ingest_cli_defaults_to_codex_and_fetches_problems_only_for_upload(worker, monkeypatch, tmp_path, upload):
+    import ingest
+
+    path = Path(__file__).resolve().parents[1] / "tools" / "ingest.py"
+    spec = importlib.util.spec_from_file_location("ingest_cli", path)
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    calls = []
+    units = [dict(id=1, name="단원")]
+    existing = [dict(id=2, body="기존 문제", source="기존 교재", has_image=False)]
+
+    def handler(request):
+        calls.append(request.url.path)
+        assert request.headers["X-Grader-Token"] == "token"
+        assert dict(request.url.params) == {"subject": "math", "grade": "중1"}
+        return httpx.Response(200, json=units if request.url.path.endswith("/units") else existing)
+
+    client_type = httpx.Client
+    monkeypatch.setattr(httpx, "Client",
+                        lambda **kwargs: client_type(transport=httpx.MockTransport(handler), **kwargs))
+    monkeypatch.setattr(worker, "load_config", lambda: ("http://test", "token"))
+    monkeypatch.setattr(cli, "ROOT", str(tmp_path))
+    monkeypatch.setattr(cli, "local_units", lambda *args: units)
+    monkeypatch.setattr(cli.engines, "new_workdir", lambda: str(tmp_path / "work"))
+    monkeypatch.setattr(cli.os, "system", lambda cmd: calls.append("upload_bundle"))
+    argv = ["ingest.py", "교재.pdf", "--subject", "math", "--grade", "중1", "--title", "교재"]
+    monkeypatch.setattr(sys, "argv", argv + (["--upload"] if upload else []))
+
+    def process(files, subject, grade, title, passed_units, engine, workdir, *, existing):
+        assert passed_units == units and engine == "codex"
+        assert [p["id"] for p in existing] == ([2] if upload else [])
+        return [], "보고서"
+
+    monkeypatch.setattr(ingest, "process", process)
+    cli.main()
+    assert calls == (["/api/grader/units", "/api/grader/problems", "upload_bundle"] if upload else [])
