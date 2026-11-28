@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="noprint row"><a href="/t/reports">← 보고서 목록</a> <button class="btn small" onclick="print()">인쇄 / PDF 저장</button>
+{% if preview %}<span class="badge wait">미리 보기 (저장 안 됨)</span>{% endif %}</div>
+{% for it in items %}{% set d = it.d %}
+<section class="card report">
+  <div class="rtitle"><h2>{{ d.name }} <span class="muted">{{ d.grade }}</span></h2><span class="muted">{{ d.start }} ~ {{ d.end }}</span></div>
+  <div class="stats">
+    <div class="stat"><span>공부한 날</span><b>{{ d.active_days }}일</b></div>
+    <div class="stat"><span>제출 / 통과</span><b>{{ d.submissions }} / {{ d.passed }}</b></div>
+    <div class="stat"><span>통과율</span><b>{{ d.pass_rate if d.pass_rate is not none else '-' }}{{ '%' if d.pass_rate is not none }}</b>
+      {% if d.prev_pass_rate is not none and d.pass_rate is not none %}<small>지난달 {{ d.prev_pass_rate }}% ({{ '%+d'|format(d.pass_rate - d.prev_pass_rate) }}%p)</small>{% endif %}</div>
+    <div class="stat"><span>이번 달 적립</span><b>{{ "{:,}".format(d.earned) }}원</b><small>잔액 {{ "{:,}".format(d.balance) }}원{% if d.paid %} · 지급 {{ "{:,}".format(d.paid) }}원{% endif %}</small></div>
+  </div>
+  <div class="cols">
+    <div><h4>난이도별</h4><table><tr><th>난이도</th><th class="r">채점</th><th class="r">통과</th><th class="r">통과율</th></tr>
+    {% for k in ['하','중','상'] %}{% set v = d.by_diff[k] %}<tr><td>{{ k }}</td><td class="r">{{ v.n }}</td><td class="r">{{ v.pass }}</td><td class="r">{{ (v.pass*100//v.n) ~ '%' if v.n else '-' }}</td></tr>{% endfor %}
+    </table>
+    <p class="small muted">한도 채운 날 {{ d.capped_days }}일 · 재도전 통과 {{ d.retry_pass }}개 · 이의신청 {{ d.appeals }}건(인정 {{ d.appeals_accepted }})</p>
+    <h4>현재 취약단원</h4><p>{% for w in d.weak_units %}<span class="badge bad">{{ w }}</span> {% else %}<span class="muted">없음 (또는 표본 모으는 중)</span>{% endfor %}</p></div>
+    <div><h4>단원별 (틀린 비율 높은 순)</h4><table><tr><th>단원</th><th class="r">채점</th><th class="r">통과율</th></tr>
+    {% for un in d.units[:10] %}<tr><td>{{ un.name }}</td><td class="r">{{ un.n }}</td><td class="r {{ 'neg' if un.pass*2 < un.n }}">{{ un.pass*100//un.n }}%</td></tr>
+    {% else %}<tr><td colspan="3" class="muted">이번 기간 채점 기록 없음</td></tr>{% endfor %}</table></div>
+  </div>
+  <h4>총평</h4>
+  {% if it.comment %}<div class="feedback">{{ it.comment }}</div>
+  {% elif it.status in ['queued','working'] %}<p class="muted">채점 PC가 AI 총평을 쓰는 중이에요.</p>
+  {% elif preview %}<p class="muted">미리 보기에는 총평이 없어요.</p>{% endif %}
+  {% if it.id %}<details class="noprint"><summary class="muted small">총평 직접 고치기</summary>
+  <form method="post" action="/t/reports/{{ it.id }}/comment"><textarea name="comment" rows="4">{{ it.comment }}</textarea><button class="btn small">저장</button></form></details>{% endif %}
+</section>
+{% else %}<p class="muted">보고서가 없어요.</p>{% endfor %}
+{% endblock %}

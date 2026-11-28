@@ -7,6 +7,7 @@
     <div class="bar"><i style="width:{{ [100, used*100//cap]|min }}%"></i></div></div>
 </section>
 {% if request.query_params.get('sent') %}<p class="alert ok">제출했어요! 채점이 끝나면 여기에 결과가 나와요.</p>{% endif %}
+{% if request.query_params.get('noskip') %}<p class="alert">지금은 바꿀 다른 문제가 없어요.</p>{% endif %}
 {% if used >= cap %}<p class="alert">오늘 적립 한도({{ cap }}원)를 다 채웠어요. 더 풀어도 되지만 적립은 내일부터 돼요.</p>{% endif %}
 
 <section class="card">
@@ -15,6 +16,9 @@
     {{ problem_view(problem) }}
     <p class="reward">통과하면 <b>{{ problem.reward }}원</b>{% if problem.difficulty == '상' %} (선생님 승인 후 적립){% endif %}</p>
     <a class="btn big" href="/s/p/{{ problem.id }}">풀이 제출하러 가기</a>
+    {% if can_skip %}<form method="post" action="/s/skip" onsubmit="return confirm('이 문제를 건너뛸까요? 건너뛰기는 하루에 1번만 돼요.')">
+      <button class="btn ghost">다른 문제로 건너뛰기 (오늘 1번)</button></form>
+    {% else %}<p class="muted small">오늘 건너뛰기는 이미 썼어요.</p>{% endif %}
   {% else %}
     <p class="muted">지금 풀 수 있는 새 문제가 없어요. 선생님이 문제를 더 올려 줄 거예요.</p>
   {% endif %}

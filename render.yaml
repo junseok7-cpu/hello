@@ -15,11 +15,7 @@ services:
         generateValue: true
       - key: BASE_URL            # 예: https://math-site.onrender.com
         sync: false
-      - key: DISCORD_CLIENT_ID
+      - key: TEACHER_PASSWORD    # 선생님 로그인 비밀번호
         sync: false
-      - key: DISCORD_CLIENT_SECRET
-        sync: false
-      - key: DISCORD_GUILD_ID
-        sync: false
-      - key: TEACHER_DISCORD_IDS
-        sync: false
+      - key: ACCESS_KEY          # 디스코드에 올릴 링크: https://<주소>/join/<이 값>
+        generateValue: true

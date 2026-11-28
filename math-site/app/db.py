@@ -40,6 +40,7 @@ class User(Base):
     grade = Column(String(4))  # 중1..고3, 선생님이 지정
     active = Column(Boolean, default=True)
     current_problem_id = Column(Integer, ForeignKey("problems.id"))
+    skip_date = Column(String(10), default="")  # 마지막으로 건너뛰기 쓴 날 (KST)
     created_at = Column(DateTime, default=now)
 
 
@@ -161,6 +162,22 @@ class ImportJob(Base):
     claimed_at = Column(DateTime)
     log = Column(Text, default="")
     created_at = Column(DateTime, default=now)
+
+
+class Report(Base):
+    """월간 보고서 (매월 28일, 전월 28일 ~ 이번 달 27일)."""
+    __tablename__ = "reports"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    period_start = Column(String(10), nullable=False)
+    period_end = Column(String(10), nullable=False)
+    data = Column(Text, default="{}")  # 통계 JSON
+    ai_comment = Column(Text, default="")
+    status = Column(String(10), default="queued")  # queued(AI 총평 대기) | working | done
+    claimed_at = Column(DateTime)
+    created_at = Column(DateTime, default=now)
+    user = relationship("User")
+    __table_args__ = (UniqueConstraint("user_id", "period_end"),)
 
 
 class Setting(Base):

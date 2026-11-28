@@ -51,3 +51,5 @@ textarea{width:100%}.stack input,.stack select{width:100%}
 .pitem.draft{border-style:dashed}.pitem a{color:var(--ink);display:block}.pitem .pick{position:absolute;right:8px;top:8px}
 .clip{font-size:14px;max-height:4.6em;overflow:hidden}.mini{max-height:80px;max-width:100%}
 fieldset{border:1px solid var(--line);border-radius:10px}
+.rtitle{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap}
+@media print{.top,.noprint{display:none!important}body{background:#fff}main{padding:0}.report{break-after:page;border:0}}

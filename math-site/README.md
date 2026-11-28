@@ -4,7 +4,7 @@
 
 ```
 [학생 폰]──사진 제출──▶ [사이트 (클라우드)] ◀──가져가서 채점──▶ [선생님 PC: 채점 프로그램]
-   ▲  디스코드 로그인        문제 은행·적립·취약단원              codex / claude CLI (구독)
+   ▲  이름 로그인            문제 은행·적립·취약단원              codex / claude CLI (구독)
    └──────────── 결과 ◀──────────┘
 ```
 
@@ -22,28 +22,25 @@
 | 표본 전엔 무작위, 이후 취약단원 위주 | 취약단원이 있으면 70%는 취약단원, 30%는 전체에서 무작위 (`weak_ratio`) |
 | 학년 범위 | 자기 학년은 전 난이도, 아래 학년은 '상'만 |
 | 논리 오류 채점 + 이의신청 | `grader/prompts.py`. 학생에게는 힌트만, 틀린 부분 목록은 선생님만 봄 |
-| 디스코드 서버 멤버만 접속 | 디스코드 로그인 + 서버 멤버 확인 |
+| 접속 | 디스코드에 올린 비밀 링크로 들어와 **이름만** 입력 (선생님이 등록한 이름만 통과). 선생님은 비밀번호 |
+| 건너뛰기 | 오늘의 문제 하루 1번 |
+| 하루 한도 초과 | 계속 풀 수 있고 적립만 막힘 |
+| 월간 보고서 | 매월 28일, 전월 28일~이번 달 27일 학생별 통계 + AI 총평 (`보고서` 메뉴, 인쇄/PDF) |
 
-## 1. 디스코드 앱 만들기 (5분)
-
-1. https://discord.com/developers/applications → **New Application** (이름: 수학 적립)
-2. **OAuth2** 메뉴 → Client ID, Client Secret 복사 → **Redirects**에 `https://<사이트주소>/auth/callback` 추가
-3. 디스코드에서 개발자 모드 켜기 (설정 → 고급) → 서버 이름 우클릭 **서버 ID 복사** → `DISCORD_GUILD_ID`
-4. 내 프로필 우클릭 **사용자 ID 복사** → `TEACHER_DISCORD_IDS` (여러 명이면 쉼표)
-
-## 2. 사이트 올리기 (클라우드, 무료)
+## 1. 사이트 올리기 (클라우드, 무료)
 
 문제·사진은 모두 DB에 저장하므로 DB 하나만 있으면 된다.
 
 1. https://neon.tech 에서 무료 Postgres 만들기 → 연결 주소 복사 (`postgresql://...`)
 2. https://render.com → New → **Blueprint** → 이 저장소 선택 (저장소 맨 위 `render.yaml` 사용)
-3. 환경변수 채우기: `DATABASE_URL`, `BASE_URL`(예: `https://math-site.onrender.com`), 디스코드 4개
-4. 배포 후 `GRADER_TOKEN` 값을 복사해 둔다 (채점 PC에 넣을 값)
-5. 사이트 주소를 디스코드 채널에 올린다
+3. 환경변수 채우기: `DATABASE_URL`, `BASE_URL`(예: `https://math-site.onrender.com`), `TEACHER_PASSWORD`
+4. 배포 후 `GRADER_TOKEN`(채점 PC에 넣을 값)과 `ACCESS_KEY` 값을 복사해 둔다
+5. 디스코드 채널에 `https://<사이트주소>/join/<ACCESS_KEY>` 링크를 올린다 (이 링크로 들어온 기기만 이름 로그인 가능)
+6. 선생님으로 들어가 **학생** 메뉴에서 7명 이름·학년 등록
 
 > Render 무료 요금제는 15분 동안 아무도 안 쓰면 잠들어서 첫 접속이 30초쯤 걸린다. 거슬리면 유료($7/월)로 올리면 된다.
 
-## 3. 채점 PC 준비 (선생님 컴퓨터)
+## 2. 채점 PC 준비 (선생님 컴퓨터)
 
 1. Python 3.11+ 와 Node.js 설치
 2. 쓰려는 구독 CLI 설치 후 로그인 (둘 다 해 두면 설정에서 바꿔 쓸 수 있다)
@@ -55,7 +52,7 @@
 
 PC가 꺼져 있는 동안 들어온 제출은 쌓여 있다가 켜면 순서대로 채점된다.
 
-## 4. 문제 넣기 (두 가지 방법)
+## 3. 문제 넣기 (두 가지 방법)
 
 - **Claude에게 맡기기**: 문제집·답지 PDF(또는 사진)를 `math-site/inbox/`에 올리고 "inbox 문제집 등록해 줘"라고 하면 Claude가 문제별로 나눠 단원·난이도를 붙이고 답지와 짝지어 `tools/upload_bundle.py`로 올린다.
 - **사이트에서 직접**: 선생님 메뉴 **PDF 등록**에 문제 PDF(+답지 PDF)를 올리면 채점 PC가 처리해 **초안**으로 넣는다.
@@ -67,7 +64,7 @@ PC가 꺼져 있는 동안 들어온 제출은 쌓여 있다가 켜면 순서대
 ```bash
 cd math-site
 pip install -r requirements.txt
-DEV_LOGIN=1 uvicorn app.main:app --reload     # http://localhost:8000 (개발용 로그인 버튼 생김)
+uvicorn app.main:app --reload     # http://localhost:8000 (선생님 비밀번호 기본값: teacher)
 cd grader && python worker.py                  # 다른 창에서
 python -m pytest tests                         # 규칙 테스트
 ```
@@ -76,6 +73,7 @@ python -m pytest tests                         # 규칙 테스트
 
 - `app/logic.py` 출제·적립·잠금·취약단원 규칙
 - `app/main.py` 화면과 채점 PC용 API
+- `app/reports.py` 월간 보고서
 - `app/curriculum.py` 기본 단원 목록 (사이트 **단원** 메뉴에서 수정)
 - `grader/worker.py` 채점 프로그램, `grader/prompts.py` 채점 기준 문구
 - `tools/upload_bundle.py` Claude가 정리한 문제 묶음 업로드

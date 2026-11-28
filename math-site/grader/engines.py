@@ -42,8 +42,9 @@ def run_codex(prompt: str, images: list[str], workdir: str) -> str:
 
 
 def run_claude(prompt: str, images: list[str], workdir: str) -> str:
-    names = ", ".join(os.path.basename(p) for p in images)
-    prompt = (f"먼저 Read 도구로 이 폴더의 이미지 파일을 모두 열어 보고 답하라: {names}\n\n" + prompt)
+    if images:
+        names = ", ".join(os.path.basename(p) for p in images)
+        prompt = f"먼저 Read 도구로 이 폴더의 이미지 파일을 모두 열어 보고 답하라: {names}\n\n" + prompt
     cmd = [_exe("claude"), "-p", "--output-format", "json", "--allowedTools", "Read"]
     if os.environ.get("CLAUDE_MODEL"):
         cmd += ["--model", os.environ["CLAUDE_MODEL"]]

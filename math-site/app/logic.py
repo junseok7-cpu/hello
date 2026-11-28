@@ -75,8 +75,8 @@ def fresh_pool(db, user: User):
     return q.all()
 
 
-def pick_problem(db, user: User, rng=random):
-    pool = fresh_pool(db, user)
+def pick_problem(db, user: User, rng=random, exclude=None):
+    pool = [p for p in fresh_pool(db, user) if p.id != exclude]
     if not pool:
         return None
     weak = set(weak_units(db, user.id))
@@ -95,6 +95,22 @@ def current_problem(db, user: User):
     p = pick_problem(db, user)
     user.current_problem_id = p.id if p else None
     return p
+
+
+def can_skip(user: User):
+    return user.skip_date != kst_today()
+
+
+def skip_problem(db, user: User, rng=random):
+    """오늘의 문제 건너뛰기 (하루 1번). 건너뛴 문제는 나중에 다시 나올 수 있다."""
+    if not can_skip(user) or not user.current_problem_id:
+        return False
+    new = pick_problem(db, user, rng, exclude=user.current_problem_id)
+    if new is None:
+        return False
+    user.current_problem_id = new.id
+    user.skip_date = kst_today()
+    return True
 
 
 def retry_list(db, user_id):

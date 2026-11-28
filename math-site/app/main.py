@@ -1,8 +1,10 @@
 """수학 적립 학습 사이트 (FastAPI)."""
 import hmac
 import io
+import json
 import os
 from datetime import datetime, timedelta
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -11,18 +13,21 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, logic
-from .db import (DEFAULT_SETTINGS, DIFFS, GRADES, KST, Blob, ImportJob, Ledger, Problem,
+from . import logic, reports
+from .db import (DEFAULT_SETTINGS, DIFFS, GRADES, KST, Blob, ImportJob, Ledger, Problem, Report,
                  SessionLocal, StudentProblem, Submission, Unit, User, get_setting,
                  init_db, kst_today, now, set_setting)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 GRADER_TOKEN = os.environ.get("GRADER_TOKEN", "dev-grader-token")
+TEACHER_PASSWORD = os.environ.get("TEACHER_PASSWORD", "teacher")
+ACCESS_KEY = os.environ.get("ACCESS_KEY", "")  # 비우면 링크 없이도 접속 가능 (로컬 테스트용)
+BASE_URL = os.environ.get("BASE_URL", "http://localhost:8000").rstrip("/")
 
 app = FastAPI(title="수학 적립 학습")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax",
-                   https_only=auth.BASE_URL.startswith("https"), max_age=60 * 60 * 24 * 30)
+                   https_only=BASE_URL.startswith("https"), max_age=60 * 60 * 24 * 30)
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
 tpl = Jinja2Templates(directory=os.path.join(HERE, "templates"))
 
@@ -34,7 +39,7 @@ def kst(dt):
 
 
 tpl.env.filters["kst"] = kst
-tpl.env.globals.update(GRADES=GRADES, DIFFS=DIFFS)
+tpl.env.globals.update(GRADES=GRADES, DIFFS=DIFFS, STUDENT_GRADES=GRADES[:4])  # 지금 학생: 중1~고1
 
 
 @app.on_event("startup")
@@ -82,50 +87,50 @@ def back(url):
 
 
 # ---------------------------------------------------------------- 로그인
+# 학생: 디스코드에 올린 링크(/join/<ACCESS_KEY>)로 들어와서 이름만 입력.
+# 선생님: 비밀번호(TEACHER_PASSWORD).
+
+def has_access(request):
+    return not ACCESS_KEY or request.session.get("access") == ACCESS_KEY
+
+
+@app.get("/join/{key}")
+def join(key: str, request: Request):
+    if ACCESS_KEY and hmac.compare_digest(key, ACCESS_KEY):
+        request.session["access"] = ACCESS_KEY
+        return back("/login-page")
+    raise HTTPException(404)
+
 
 @app.get("/login-page", response_class=HTMLResponse)
 def login_page(request: Request, msg: str = ""):
-    return render(request, "login.html", msg=msg, dev=auth.DEV_LOGIN)
+    return render(request, "login.html", msg=msg, access=has_access(request))
 
 
-@app.get("/login")
-def login(request: Request):
-    if not auth.CLIENT_ID:
-        return back("/login-page?msg=디스코드 로그인이 아직 설정되지 않았어요")
-    return RedirectResponse(auth.authorize_url(request), 302)
-
-
-@app.get("/auth/callback")
-async def callback(request: Request, code: str = "", state: str = "", db=Depends(get_db)):
-    if not code or state != request.session.pop("oauth_state", None):
-        return back("/login-page?msg=로그인을 다시 시도해 주세요")
-    info = await auth.exchange(code)
-    if info is None:
-        return back("/login-page?msg=우리 디스코드 서버 멤버만 들어올 수 있어요")
-    did, name = info
-    u = db.query(User).filter_by(discord_id=did).first()
+@app.post("/login")
+def login(request: Request, name: str = Form(...), db=Depends(get_db)):
+    if not has_access(request):
+        return back("/login-page")
+    name = " ".join(name.split())
+    u = db.query(User).filter(User.role == "student", User.active.is_(True), User.name == name).first()
     if not u:
-        u = User(discord_id=did, name=name)
-        db.add(u)
-    u.role = "teacher" if did in auth.TEACHER_IDS else u.role or "student"
-    db.commit()
+        return back("/login-page?msg=" + quote("등록된 이름이 아니에요. 선생님께 물어봐 주세요."))
     request.session["uid"] = u.id
-    return back("/")
+    return back("/s")
 
 
-@app.get("/dev-login")
-def dev_login(request: Request, name: str = "선생님", role: str = "teacher",
-              grade: str = "중2", db=Depends(get_db)):
-    if not auth.DEV_LOGIN:
-        raise HTTPException(404)
-    u = db.query(User).filter_by(discord_id="dev:" + name).first()
+@app.post("/teacher-login")
+def teacher_login(request: Request, password: str = Form(...), db=Depends(get_db)):
+    if not hmac.compare_digest(password, TEACHER_PASSWORD):
+        return back("/login-page?msg=" + quote("비밀번호가 틀렸어요"))
+    u = db.query(User).filter_by(role="teacher").first()
     if not u:
-        u = User(discord_id="dev:" + name, name=name, role=role,
-                 grade=grade if role == "student" else None)
+        u = User(name="선생님", role="teacher", discord_id="teacher")
         db.add(u)
         db.commit()
     request.session["uid"] = u.id
-    return back("/")
+    request.session["access"] = ACCESS_KEY
+    return back("/t")
 
 
 @app.get("/logout")
@@ -206,7 +211,8 @@ def s_home(request: Request, u: User = Depends(current_user), db=Depends(get_db)
     recent = (db.query(Submission).filter_by(user_id=u.id)
               .order_by(Submission.id.desc()).limit(8).all())
     return render(request, "s_home.html", problem=p, waiting=waiting, pending=pending,
-                  retry=retry, locked=locked, recent=recent, now=now(), **student_ctx(db, u))
+                  retry=retry, locked=locked, recent=recent, now=now(),
+                  can_skip=logic.can_skip(u), **student_ctx(db, u))
 
 
 @app.get("/s/p/{pid}", response_class=HTMLResponse)
@@ -241,6 +247,13 @@ async def s_submit(pid: int, photos: list[UploadFile] = File(...), typed_answer:
     logic.create_submission(db, u, p, ids, typed_answer)
     db.commit()
     return back("/s?sent=1")
+
+
+@app.post("/s/skip")
+def s_skip(u: User = Depends(current_user), db=Depends(get_db)):
+    ok = logic.skip_problem(db, u)
+    db.commit()
+    return back("/s" if ok else "/s?noskip=1")
 
 
 @app.post("/s/appeal/{sid}")
@@ -286,6 +299,8 @@ def weak_matrix(db, students):
 
 @app.get("/t", response_class=HTMLResponse)
 def t_home(request: Request, u: User = Depends(teacher), db=Depends(get_db)):
+    if reports.ensure_reports(db):
+        db.commit()
     students = db.query(User).filter_by(role="student", active=True).order_by(User.grade, User.name).all()
     summary = []
     for st in students:
@@ -345,10 +360,22 @@ def t_students(request: Request, u: User = Depends(teacher), db=Depends(get_db))
     return render(request, "t_students.html", user=u, users=users, bal=bal)
 
 
+@app.post("/t/students/add")
+def t_student_add(name: str = Form(...), grade: str = Form(...), u: User = Depends(teacher), db=Depends(get_db)):
+    name = " ".join(name.split())
+    if name and grade in GRADES and not db.query(User).filter_by(role="student", name=name).first():
+        db.add(User(name=name, grade=grade, role="student", discord_id="name:" + name))
+        db.commit()
+    return back("/t/students")
+
+
 @app.post("/t/students/{sid}")
-def t_student_update(sid: int, grade: str = Form(""), active: str = Form("1"),
+def t_student_update(sid: int, grade: str = Form(""), active: str = Form("1"), name: str = Form(""),
                      u: User = Depends(teacher), db=Depends(get_db)):
     st = db.get(User, sid)
+    name = " ".join(name.split())
+    if name and name != st.name and not db.query(User).filter_by(role="student", name=name).first():
+        st.name = name
     st.grade = grade if grade in GRADES else None
     st.active = active == "1"
     st.current_problem_id = None  # 학년이 바뀌면 다시 뽑기
@@ -508,6 +535,45 @@ async def t_import_post(title: str = Form(...), grade: str = Form(...), problems
     return back("/t/import")
 
 
+# ----- 월간 보고서
+
+@app.get("/t/reports", response_class=HTMLResponse)
+def t_reports(request: Request, u: User = Depends(teacher), db=Depends(get_db)):
+    if reports.ensure_reports(db):
+        db.commit()
+    periods = (db.query(Report.period_start, Report.period_end, func.count(Report.id))
+               .group_by(Report.period_start, Report.period_end).order_by(Report.period_end.desc()).all())
+    cs, ce = reports.current_period(reports.today_kst())
+    return render(request, "t_reports.html", user=u, periods=periods, cur=(cs, ce))
+
+
+@app.get("/t/reports/view", response_class=HTMLResponse)
+def t_report_view(request: Request, end: str = "", student: int = 0, preview: int = 0,
+                  u: User = Depends(teacher), db=Depends(get_db)):
+    items = []
+    if preview:  # 진행 중인 기간을 지금 기준으로 미리 보기 (저장 안 함)
+        s, e = reports.current_period(reports.today_kst())
+        for st in db.query(User).filter(User.role == "student", User.active.is_(True),
+                                        User.grade.isnot(None)).order_by(User.grade, User.name):
+            if not student or st.id == student:
+                items.append(dict(d=reports.collect(db, st, s, e), comment="", status="preview"))
+    else:
+        q = db.query(Report).filter_by(period_end=end)
+        if student:
+            q = q.filter_by(user_id=student)
+        for r in q.join(User).order_by(User.grade, User.name):
+            items.append(dict(d=json.loads(r.data), comment=r.ai_comment, status=r.status, id=r.id))
+    return render(request, "t_report.html", user=u, items=items, preview=preview)
+
+
+@app.post("/t/reports/{rid}/comment")
+def t_report_comment(rid: int, comment: str = Form(""), u: User = Depends(teacher), db=Depends(get_db)):
+    r = db.get(Report, rid)
+    r.ai_comment, r.status = comment, "done"
+    db.commit()
+    return back(f"/t/reports/view?end={r.period_end}")
+
+
 @app.get("/t/settings", response_class=HTMLResponse)
 def t_settings(request: Request, u: User = Depends(teacher), db=Depends(get_db)):
     vals = {k: get_setting(db, k) for k in DEFAULT_SETTINGS if k != "last_grader_seen"}
@@ -566,6 +632,14 @@ def g_claim(db=Depends(get_db)):
         db.commit()
         return dict(type="import", engine=engine, job_id=j.id, title=j.title, grade=j.grade,
                     problem_blob_id=j.problem_blob_id, answer_blob_id=j.answer_blob_id, units=units)
+    if reports.ensure_reports(db):
+        db.flush()
+    db.query(Report).filter(Report.status == "working", Report.claimed_at < stale).update({"status": "queued"})
+    r = db.query(Report).filter_by(status="queued").order_by(Report.id).first()
+    if r:
+        r.status, r.claimed_at = "working", now()
+        db.commit()
+        return dict(type="report", engine=engine, report_id=r.id, data=json.loads(r.data))
     db.commit()
     return dict(type="none")
 
@@ -630,6 +704,19 @@ async def g_import_done(jid: int, request: Request, db=Depends(get_db)):
     j = db.get(ImportJob, jid)
     j.status = "error" if data.get("error") else "done"
     j.log = str(data.get("log", ""))[:5000]
+    _seen(db)
+    db.commit()
+    return dict(ok=True)
+
+
+@app.post("/api/grader/report/{rid}", dependencies=[Depends(grader)])
+async def g_report(rid: int, request: Request, db=Depends(get_db)):
+    data = await request.json()
+    r = db.get(Report, rid)
+    if data.get("error"):
+        r.status = "error"  # 총평 없이 통계만 보여 준다 (선생님이 직접 써도 됨)
+    else:
+        r.ai_comment, r.status = str(data.get("comment", ""))[:3000], "done"
     _seen(db)
     db.commit()
     return dict(ok=True)

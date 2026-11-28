@@ -143,3 +143,39 @@ def test_appeal_accept_turns_fail_into_pass(db):
     L.resolve_appeal(db, s, True, 95)
     sp = L.get_sp(db, u.id, p.id)
     assert sp.state == "solved" and L.balance(db, u.id) == 10
+
+
+def test_skip_once_per_day(db):
+    u = student(db)
+    ps = [prob(db, "중2", "하") for _ in range(3)]
+    first = L.current_problem(db, u)
+    assert L.skip_problem(db, u, random.Random(0))
+    assert u.current_problem_id != first.id
+    assert not L.can_skip(u) and not L.skip_problem(db, u)
+
+
+def test_report_period():
+    from datetime import date
+    from app.reports import latest_period, current_period
+    assert latest_period(date(2026, 11, 28)) == ("2026-10-28", "2026-11-27")
+    assert latest_period(date(2026, 11, 27)) == ("2026-09-28", "2026-10-27")
+    assert latest_period(date(2026, 1, 5)) == ("2025-11-28", "2025-12-27")
+    assert current_period(date(2026, 11, 28)) == ("2026-11-28", "2026-11-28")
+
+
+def test_report_collect(db):
+    import json
+    from datetime import date
+    from app import reports as R
+    u = student(db)
+    u.created_at = D.now() - timedelta(days=60)
+    s1 = submit(db, u, prob(db, "중2", "중", 0), 95)
+    s2 = submit(db, u, prob(db, "중2", "상", 1), 40)
+    for s in (s1, s2):
+        s.kst_date = "2026-11-10"
+    db.query(D.Ledger).update({"kst_date": "2026-11-10"})
+    assert R.ensure_reports(db, date(2026, 11, 28)) == 1
+    assert R.ensure_reports(db, date(2026, 11, 29)) == 0  # 같은 기간은 한 번만
+    d = json.loads(db.query(D.Report).one().data)
+    assert d["submissions"] == 2 and d["passed"] == 1 and d["pass_rate"] == 50 and d["earned"] == 10
+    assert d["by_diff"]["상"] == {"n": 1, "pass": 0}

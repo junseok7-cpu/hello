@@ -62,6 +62,9 @@ class Site:
         r.raise_for_status()
         return r.json()["id"]
 
+    def report(self, rid, data):
+        self.c.post(f"/api/grader/report/{rid}", json=data).raise_for_status()
+
     def import_done(self, jid, log, error=False):
         self.c.post(f"/api/grader/import/{jid}", json={"log": log, "error": error})
 
@@ -100,6 +103,23 @@ def grade(site: Site, job: dict):
     except Exception as e:
         print(f"  채점 실패 #{job['submission_id']}: {e}")
         site.result(job["submission_id"], dict(error=str(e)))
+    finally:
+        shutil.rmtree(wd, ignore_errors=True)
+
+
+# ------------------------------------------------------------------ 월간 보고서 총평
+
+def write_report(site: Site, job: dict):
+    import json
+    wd = engines.new_workdir()
+    try:
+        res = engines.ask(job["engine"], prompts.REPORT.format(
+            data=json.dumps(job["data"], ensure_ascii=False, indent=1)), [], wd)
+        site.report(job["report_id"], {"comment": res.get("comment", "")})
+        print(f"  보고서 #{job['report_id']} 총평 완료")
+    except Exception as e:
+        print(f"  보고서 #{job['report_id']} 실패: {e}")
+        site.report(job["report_id"], {"error": str(e)})
     finally:
         shutil.rmtree(wd, ignore_errors=True)
 
@@ -215,6 +235,10 @@ def main():
             if job["type"] == "import":
                 print(f"[PDF 등록] {job['title']} ({job['engine']})")
                 do_import(site, job)
+                continue
+            if job["type"] == "report":
+                print(f"[보고서] {job['data']['name']} {job['data']['start']}~{job['data']['end']}")
+                write_report(site, job)
                 continue
             if args.once:
                 print("할 일이 없어요.")
