@@ -28,7 +28,8 @@ def _client(endpoint, key_id, secret, region):
     def _drop_expect(request, **_):
         request.headers.pop("Expect", None)
 
-    client.meta.events.register_first("before-send.s3.*", _drop_expect)
+    if hasattr(client, "meta"):  # 테스트용 가짜 클라이언트는 meta 가 없다
+        client.meta.events.register_first("before-send.s3.*", _drop_expect)
     return client
 
 
