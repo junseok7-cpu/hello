@@ -87,6 +87,12 @@ class _P:
             out.append(tok)
         return out
 
+    def scripted_atom(self):
+        value = self.atom()
+        while self.peek() in ("^", "_"):
+            value += self.atom()
+        return value
+
     def atom(self):
         tok = self.take()
         if tok is None:
@@ -137,12 +143,12 @@ def convert_tokens(toks):
         if tok.lower() == "over":  # 바로 앞뒤 덩어리를 분수로
             p.take()
             left = items.pop() if items else ""
-            items.append(rf"\frac{{{_strip(left)}}}{{{_strip(p.atom())}}}")
+            items.append(rf"\frac{{{_strip(left)}}}{{{_strip(p.scripted_atom())}}}")
         elif tok in ("#", "&"):
             p.take()
             items.append(r" \\ " if tok == "#" else " & ")
         else:
-            items.append(p.atom())
+            items.append(p.scripted_atom())
     return re.sub(r" +", " ", "".join(items)).strip()
 
 

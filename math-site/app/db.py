@@ -2,8 +2,8 @@
 import os
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import (Boolean, Column, DateTime, ForeignKey, Integer, LargeBinary,
-                        String, Text, UniqueConstraint, create_engine)
+from sqlalchemy import (Boolean, Column, DateTime, ForeignKey, Index, Integer, LargeBinary,
+                        String, Text, UniqueConstraint, create_engine, inspect, text)
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 KST = timezone(timedelta(hours=9))
@@ -126,6 +126,7 @@ class Submission(Base):
     typed_answer = Column(String(300), default="")
     status = Column(String(10), default="queued")  # queued | grading | graded | error
     claimed_at = Column(DateTime)
+    retry_count = Column(Integer, nullable=False, server_default="0")
     score = Column(Integer)
     feedback = Column(Text, default="")
     answer_read = Column(String(300), default="")
@@ -160,6 +161,7 @@ class Ledger(Base):
     amount = Column(Integer, nullable=False)  # +적립 / -지급
     kind = Column(String(10), default="reward")  # reward | payout | adjust
     submission_id = Column(Integer, ForeignKey("submissions.id"))
+    __table_args__ = (Index("uq_ledger_submission", "submission_id", unique=True),)
     kst_date = Column(String(10), default=kst_today)
     memo = Column(String(200), default="")
     created_at = Column(DateTime, default=now)
@@ -234,6 +236,16 @@ def set_setting(db, key, value):
 
 def init_db():
     Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        if "retry_count" not in {c["name"] for c in inspect(conn).get_columns("submissions")}:
+            conn.execute(text("ALTER TABLE submissions ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0"))
+        if "uq_ledger_submission" not in {i["name"] for i in inspect(conn).get_indexes("ledger")}:
+            duplicate = conn.execute(text(
+                "SELECT 1 FROM ledger WHERE submission_id IS NOT NULL "
+                "GROUP BY submission_id HAVING COUNT(*) > 1 LIMIT 1"
+            )).first()
+            if not duplicate:
+                conn.execute(text("CREATE UNIQUE INDEX uq_ledger_submission ON ledger (submission_id)"))
     from .curriculum import seed_units
     with SessionLocal() as db:
         seed_units(db)

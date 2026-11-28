@@ -84,6 +84,7 @@ class _Doc:
         self.parts = []      # 글자 조각
         self.figures = {}    # 표시 → 파일
         self.n_eq = 0
+        self.n_shapes = 0
 
     def text(self, s):
         self.parts.append(s)
@@ -168,14 +169,33 @@ def read_hwpx(path, workdir):
 
         def walk(el):
             tag = _local(el.tag)
-            if tag in ("header", "footer", "secPr", "pagePr", "footNote", "endNote", "linesegarray"):
+            if tag in ("header", "footer", "secPr", "pagePr", "linesegarray"):
+                return
+            if tag in ("footNote", "endNote"):
+                sub = _Doc(name, workdir)
+                sub.figures = doc.figures
+                _walk_into(el, sub)
+                doc.n_eq += sub.n_eq
+                doc.n_shapes += sub.n_shapes
+                doc.text("(주: " + " ".join("".join(sub.parts).split()) + ")")
+                return
+            if tag in ("rect", "ellipse", "line", "arc", "polygon", "curve", "connectLine",
+                       "container", "textart", "textArt", "ole"):
+                doc.n_shapes += 1
+                doc.text(" [도형: 원본 확인 필요] ")
+                if tag == "container":
+                    for ch in el:
+                        walk(ch)
                 return
             if tag == "t":
                 if el.text:
                     doc.text(el.text)
                 for ch in el:
                     ct = _local(ch.tag)
-                    doc.text("\t" if ct == "tab" else "\n" if ct == "lineBreak" else "")
+                    if ct in ("tab", "lineBreak"):
+                        doc.text("\t" if ct == "tab" else "\n")
+                    else:
+                        walk(ch)
                     if ch.tail:
                         doc.text(ch.tail)
                 return
@@ -196,7 +216,8 @@ def read_hwpx(path, workdir):
                     for tc in (c for c in tr if _local(c.tag) == "tc"):
                         sub = _Doc(name, workdir)
                         sub.figures = doc.figures
-                        _walk_into(tc, sub, walk_fn=None)
+                        _walk_into(tc, sub)
+                        doc.n_shapes += sub.n_shapes
                         cells.append(" ".join("".join(sub.parts).split()))
                     doc.text("| " + " | ".join(cells) + " |\n")
                     doc.n_eq += sum(1 for c in cells if "⟦hwp:" in c)
@@ -207,7 +228,7 @@ def read_hwpx(path, workdir):
             if tag == "p":
                 doc.text("\n")
 
-        def _walk_into(root, target, walk_fn):
+        def _walk_into(root, target):
             nonlocal doc
             saved, doc = doc, target
             try:
@@ -391,5 +412,6 @@ def read_any(path, workdir):
         pages = doc.pages()
         if not pages:
             raise ReadError("문서에서 글자를 하나도 찾지 못했어요")
-        return pages, {"kind": ext[1:], "chunks": len(pages), "equations": doc.n_eq, "figures": len(doc.figures)}
+        return pages, {"kind": ext[1:], "chunks": len(pages), "equations": doc.n_eq, "figures": len(doc.figures),
+                       "shapes": doc.n_shapes}
     raise ReadError(f"지원하지 않는 형식: {ext} (PDF, HWP, HWPX만)")

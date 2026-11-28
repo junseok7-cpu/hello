@@ -5,6 +5,7 @@
   {% if show_meta %}<div class="meta">{{ diff_badge(p.difficulty) }} <span class="badge subj-{{ p.subject }}">{{ SUBJECTS[p.subject] }}</span> {{ p.unit.grade }} · {{ p.unit.name }}{% if p.source %} · <span class="muted">{{ p.source }}</span>{% endif %}</div>{% endif %}
   {% if p.body and (both or not p.image_id or p.image_kind != 'full') %}<div class="math body">{{ p.body }}</div>{% endif %}
   {% if p.image_id %}<img class="pimg" src="/blob/{{ p.image_id }}" alt="문제 그림">{% endif %}
+  {% if p.body and p.image_id and p.image_kind == 'full' and not both %}<details><summary>글로 보기</summary><div class="math body">{{ p.body }}</div></details>{% endif %}
 </div>
 {% endmacro %}
 

@@ -18,8 +18,7 @@ QTYPES = ("essay", "calc", "mc_right", "mc_wrong")
 
 
 def _norm_num(n):
-    s = re.sub(r"[^0-9A-Za-z가-힣]", "", str(n or ""))
-    return s.lstrip("0") or s or ""
+    return re.sub(r"(?<![0-9])0+(?=[0-9])", "", str(n or "").strip())
 
 
 def _norm_sec(s):
@@ -45,42 +44,51 @@ def analyze_page(page, ctx, engine, workdir):
         figure_rule = '   - figures: 이 문제에 딸린 그림 표시 목록 (예: ["그림3"]). 글자 속 [그림N] 위치를 보고 정한다.'
         figure_field = '"figures": [],'
         images = list(page.figures.values())
+    text = (page.text or "(없음)")[:14000]
+    if is_pdf and ctx.get("previous_text"):
+        text = f"⟪앞 쪽의 끝부분(참고용)⟫\n{ctx['previous_text'][-800:]}\n⟪여기부터 이번 쪽⟫\n{text}"
     prompt = prompts.ANALYZE_PAGE.format(
         subject_name=SUBJECT_NAMES.get(ctx["subject"], "수학"), title=ctx["title"], grade=ctx["grade"],
         source=page.source, where=f"{page.no}쪽" if is_pdf else f"{page.no}번째 조각",
-        image_note=image_note, text=(page.text or "(없음)")[:14000], blocks=blocks,
+        image_note=image_note, text=text, blocks=blocks,
         figure_rule=figure_rule, figure_field=figure_field, units=ctx["units_text"])
     return engines.ask(engine, prompt, images, workdir)
 
 
 def pair_answers(problems, answers):
-    """문제-답지 짝짓기: (구역, 번호)가 맞으면 그대로, 번호가 겹치면 나온 순서대로."""
-    by_key = defaultdict(list)
+    """구역과 번호가 같은 답지를 먼저 짝짓는다."""
+    def key(item):
+        return _norm_sec(item.get("section")), _norm_num(item.get("number"))
+
+    by_key, by_num = defaultdict(list), defaultdict(list)
     for a in answers:
-        by_key[(_norm_sec(a.get("section")), _norm_num(a.get("number")))].append(a)
-    by_num = defaultdict(list)
-    for a in answers:
-        by_num[_norm_num(a.get("number"))].append(a)
+        by_key[key(a)].append(a)
+        by_num[key(a)[1]].append(a)
     used = set()
     num_count = defaultdict(int)
     for p in problems:
-        num_count[_norm_num(p.get("number"))] += 1
-    for p in problems:
-        key = (_norm_sec(p.get("section")), _norm_num(p.get("number")))
-        cand = [a for a in by_key.get(key, []) if id(a) not in used] if key[0] else []
-        if not cand:
-            cand = [a for a in by_num.get(key[1], []) if id(a) not in used]
-            if cand and num_count[key[1]] > 1:
-                p.setdefault("_notes", []).append("번호가 겹쳐서 나온 순서대로 답지와 짝지음")
-        if cand:
-            p["_answer"] = cand[0]
-            used.add(id(cand[0]))
+        num_count[key(p)[1]] += 1
+    for exact in (True, False):
+        for p in problems:
+            if "_answer" in p:
+                continue
+            section, number = key(p)
+            candidates = by_key[section, number] if exact else by_num[number]
+            for a in candidates:
+                if id(a) in used or (not exact and bool(section) == bool(key(a)[0])):
+                    continue
+                p["_answer"] = a
+                used.add(id(a))
+                if num_count[number] > 1 and (not exact or not section):
+                    p.setdefault("_notes", []).append("번호가 겹쳐서 나온 순서대로 답지와 짝지음")
+                break
     return [a for a in answers if id(a) not in used]
 
 
 def _merge_figures(paths):
     from PIL import Image
-    ims = [Image.open(p).convert("RGB") for p in paths if os.path.exists(p)]
+    ims = [Image.open(io.BytesIO(p) if isinstance(p, bytes) else p).convert("RGB")
+           for p in paths if isinstance(p, bytes) or (p and os.path.exists(p))]
     if not ims:
         return None
     if len(ims) == 1:
@@ -123,7 +131,9 @@ def process(files, subject, grade, title, units, engine, workdir, log=print):
         stats.append(f"{os.path.basename(path)}: {meta}")
         if meta.get("scanned"):
             notes.append(f"⚠️ {os.path.basename(path)}: 글자 층이 없는 스캔 PDF라 그림에서 읽었어요. 오타를 꼭 확인하세요.")
+        previous_text = ""
         for page in pages:
+            ctx["previous_text"], previous_text = previous_text, page.text
             try:
                 res = analyze_page(page, ctx, engine, workdir)
             except Exception as e:
@@ -137,16 +147,22 @@ def process(files, subject, grade, title, units, engine, workdir, log=print):
                 answers.append(a)
             log(f"  {page.source} {page.no}: 문제 {len(res.get('problems') or [])}, 답지 {len(res.get('answers') or [])}")
 
-    # 한글 조각 경계에서 같은 문제가 두 번 나오면 긴 쪽만 남긴다
+    # 이어지는 문제는 본문을 고르고 쪽별 영역은 보관한다.
     seen = {}
     for q in problems:
-        k = (q["_page"].source, _norm_sec(q.get("section")), _norm_num(q.get("number")))
-        if k in seen and q["_page"].image is None:
-            if len(q.get("body", "")) > len(seen[k].get("body", "")):
-                seen[k].update({kk: v for kk, v in q.items()})
+        page = q["_page"]
+        k = (page.source, _norm_sec(q.get("section")), _norm_num(q.get("number")))
+        previous, last_page = seen.get(k, (None, None))
+        if previous is not None and (page.image is None or page.no == last_page + 1):
+            crops = previous.get("_crops", [(previous["_page"].pdf, previous.get("bbox"))])
+            if len(q.get("body", "")) > len(previous.get("body", "")):
+                previous.update(q)
+            if page.image is not None:
+                previous["_crops"] = crops + [(page.pdf, q.get("bbox"))]
             q["_dup"] = True
+            seen[k] = previous, page.no
         else:
-            seen[k] = q
+            seen[k] = q, page.no
     problems = [q for q in problems if not q.get("_dup")]
     leftover = pair_answers(problems, answers)
 
@@ -155,12 +171,17 @@ def process(files, subject, grade, title, units, engine, workdir, log=print):
         page = q["_page"]
         a = q.get("_answer") or {}
         rn = list(q.get("_notes", []))
+        if "[도형:" in q.get("body", ""):
+            rn.append("한글 도형 개체가 있어 그림이 빠졌을 수 있음 — 원본 확인")
         if not a:
             rn.append("답지 없음")
         if q.get("unclear"):
             rn.append("AI가 확실히 못 읽은 부분: " + str(q["unclear"]))
         image, image_kind = None, "figure"
-        if q.get("has_figure") or page.image is not None and q.get("bbox") and not page.text:
+        if q.get("_crops"):
+            image = _merge_figures([docread.crop_pdf(pdf, bbox) for pdf, bbox in q["_crops"] if pdf and bbox])
+            image_kind = "full"
+        elif q.get("has_figure") or page.image is not None and q.get("bbox") and not page.text:
             if page.pdf and q.get("bbox"):
                 image, image_kind = docread.crop_pdf(page.pdf, q["bbox"]), "full"
             elif q.get("figures"):

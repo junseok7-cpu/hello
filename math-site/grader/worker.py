@@ -8,6 +8,7 @@
 설정: 같은 폴더의 config.env (SITE_URL, GRADER_TOKEN)
 """
 import argparse
+import json
 import os
 import shutil
 import sys
@@ -53,7 +54,10 @@ class Site:
         return path
 
     def result(self, sid, data):
-        self.c.post(f"/api/grader/result/{sid}", json=data).raise_for_status()
+        r = self.c.post(f"/api/grader/result/{sid}", json=data)
+        r.raise_for_status()
+        if r.json().get("ok") is False:
+            print(f"  경고: 채점 #{sid} 결과가 반영되지 않았어요")
 
     def add_problem(self, fields, image_bytes=None):
         files = {"image": ("p.png", image_bytes, "image/png")} if image_bytes else None
@@ -98,9 +102,11 @@ def grade(site: Site, job: dict):
             body=p["body"] or "(문제 이미지 참고)", problem_image_note=pimg_note,
             answer=p["answer"] or "(답지 이미지 참고)", solution=p["solution"] or "(답지 이미지 참고)",
             solution_image_note=sol_note, student_images=students,
-            typed_answer_note=f"학생이 따로 입력한 최종 답: {job['typed_answer']}" if job.get("typed_answer") else "")
+            typed_answer_note=json.dumps(job.get("typed_answer", ""), ensure_ascii=False))
         res = engines.ask(job["engine"], prompt, imgs, wd)
-        score = int(res["score"])
+        score = res.get("score")
+        if type(score) is not int or not 0 <= score <= 100:
+            raise ValueError("채점 점수는 0~100 정수여야 해요")
         fb = res.get("feedback", "")
         errs = "\n".join("• " + str(x) for x in (res.get("logic_errors") or []))
         site.result(job["submission_id"], dict(score=score, feedback=fb, errors=errs,
@@ -117,7 +123,6 @@ def grade(site: Site, job: dict):
 # ------------------------------------------------------------------ 월간 보고서 총평
 
 def write_report(site: Site, job: dict):
-    import json
     wd = engines.new_workdir()
     try:
         res = engines.ask(job["engine"], prompts.REPORT.format(
@@ -143,12 +148,17 @@ def do_import(site: Site, job: dict, engine=None, log=print):
         lines.append(msg)
         log(msg)
     try:
+        site.c.post(f"/api/grader/import/{job['job_id']}/reset").raise_for_status()
         paths = []
         for i, f in enumerate(job["files"]):
             name = f"{i + 1:02d}_" + os.path.basename(f["name"] or f"file{i}.pdf")
             paths.append(site.blob(f["blob_id"], os.path.join(wd, name)))
         items, report = ingest.process(paths, job.get("subject", "math"), job["grade"], job["title"],
                                        job["units"], engine, wd, log=note)
+        if not items:
+            site.c.post(f"/api/grader/import/{job['job_id']}",
+                        json={"log": "등록할 문제가 없어요", "report": report, "error": True}).raise_for_status()
+            return
         for it in items:
             site.add_problem(dict(unit_id=it["unit_id"], difficulty=it["difficulty"], qtype=it["qtype"],
                                   body=it["body"], answer=it["answer"], solution=it["solution"],
@@ -181,17 +191,16 @@ def main():
             if job["type"] == "grade":
                 print(f"[채점] 제출 #{job['submission_id']} ({job['engine']})")
                 grade(site, job)
-                continue
-            if job["type"] == "import":
+            elif job["type"] == "import":
                 print(f"[문제집 등록] {job['title']} ({job['engine']})")
                 do_import(site, job)
-                continue
-            if job["type"] == "report":
+            elif job["type"] == "report":
                 print(f"[보고서] {job['data']['name']} {job['data']['start']}~{job['data']['end']}")
                 write_report(site, job)
-                continue
-            if args.once:
+            elif args.once:
                 print("할 일이 없어요.")
+            if not args.once and job["type"] in ("grade", "import", "report"):
+                continue
         except httpx.HTTPError as e:
             print("사이트 연결 실패:", e)
         except KeyboardInterrupt:

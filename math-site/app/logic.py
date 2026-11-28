@@ -2,7 +2,7 @@
 import random
 from datetime import timedelta
 
-from sqlalchemy import func
+from sqlalchemy import func, update
 
 from .db import (DIFFS, GRADES, Ledger, Problem, StudentProblem, Submission, Unit, User,
                  get_setting, kst_today, now)
@@ -54,20 +54,25 @@ def eligible_units(db, student_grade, subject="math"):
 # ---------- 취약단원 (요구사항 10, 12, 13) ----------
 
 def unit_stats(db, user_id, subject=None):
-    """단원별 {중: [채점수, 오답수], 상: [...], 하: [...]} — 채점된 모든 제출 기준."""
-    q = (db.query(Problem.unit_id, Problem.difficulty, Submission.score, Submission.reward_status)
+    """단원별 {중: [채점수, 오답수], 상: [...], 하: [...]} — 채점된 문제 기준."""
+    q = (db.query(Problem.id, Problem.unit_id, Problem.difficulty, Submission.score, Submission.reward_status)
          .join(Submission, Submission.problem_id == Problem.id)
-         .filter(Submission.user_id == user_id, Submission.status == "graded"))
+         .filter(Submission.user_id == user_id, Submission.status == "graded",
+                 Submission.reward_status != "pending"))
     if subject:
         q = q.join(Unit, Unit.id == Problem.unit_id).filter(Unit.subject == subject)
     rows = q.all()
     pass_score = int(get_setting(db, "pass_score"))
+    problems, wrong = {}, set()
+    for pid, unit_id, diff, score, rstatus in rows:
+        problems[pid] = (unit_id, diff)
+        if score is None or score < pass_score or rstatus == "rejected":
+            wrong.add(pid)
     stats = {}
-    for unit_id, diff, score, rstatus in rows:
+    for pid, (unit_id, diff) in problems.items():
         s = stats.setdefault(unit_id, {"하": [0, 0], "중": [0, 0], "상": [0, 0]})
         s[diff][0] += 1
-        wrong = score is None or score < pass_score or rstatus == "rejected"
-        if wrong:
+        if pid in wrong:
             s[diff][1] += 1
     return stats
 
@@ -77,7 +82,7 @@ def judge_unit(db, s):
     mid_n, mid_w = s["중"]
     hi_n, hi_w = s["상"]
     ms, hs = int(get_setting(db, "mid_sample")), int(get_setting(db, "hi_sample"))
-    mid_ready, hi_ready = mid_n >= ms, hi_n >= hs
+    mid_ready, hi_ready = mid_n > 0 and mid_n >= ms, hi_n > 0 and hi_n >= hs
     if mid_ready and mid_w / mid_n >= _f(db, "mid_wrong"):
         return "weak"
     if hi_ready and hi_w / hi_n >= _f(db, "hi_wrong"):
@@ -179,6 +184,9 @@ def retry_list(db, user_id):
 
 
 def can_submit(db, user: User, problem_id: int):
+    p = db.get(Problem, problem_id)
+    if not p or p.status != "published" or not eligible(p.grade, p.difficulty, user.grade, p.subject):
+        return False
     if is_current(user, problem_id):
         sp = get_sp(db, user.id, problem_id)
         return sp is None or sp.state == "open" or _lock_over(sp)
@@ -199,9 +207,15 @@ def create_submission(db, user: User, problem: Problem, image_ids, typed_answer=
     if sp is None:
         sp = StudentProblem(user_id=user.id, problem_id=problem.id, fail_count=0)
         db.add(sp)
-    elif _lock_over(sp):  # 한 달 뒤 재도전 라운드 시작
-        sp.fail_count = 0
-        sp.is_retry = True
+    else:
+        if not _claim_result(db, sp, ("open", "locked")):
+            raise ValueError("지금은 이 문제를 제출할 수 없어요")
+        db.refresh(sp)
+        if _lock_over(sp):
+            sp.fail_count = 0
+            sp.is_retry = True
+        elif sp.state != "open":
+            raise ValueError("지금은 이 문제를 제출할 수 없어요")
     sp.state = "waiting"
     sub = Submission(user_id=user.id, problem_id=problem.id,
                      image_ids=",".join(str(i) for i in image_ids),
@@ -247,20 +261,26 @@ def reward_for(db, sub: Submission):
     return base // 2 if sub.is_retry else base
 
 
+def _credit(db, sub, memo):
+    if sub.reward_amount > 0 and not db.query(Ledger).filter_by(submission_id=sub.id).first():
+        db.add(Ledger(user_id=sub.user_id, amount=sub.reward_amount, kind="reward",
+                      submission_id=sub.id, kst_date=sub.kst_date,
+                      memo=memo + (" 재도전" if sub.is_retry else "")))
+
+
 def _apply_pass(db, sub: Submission, sp: StudentProblem):
     subj = subject_of(sub.problem)
     room = max(0, cap_of(db, subj) - used_today(db, sub.user_id, sub.kst_date, subj, exclude_sub_id=sub.id))
     amount = min(reward_for(db, sub), room)
     sub.reward_amount = amount
-    if sub.problem.difficulty == "상" and amount > 0:
+    if sub.problem.difficulty == "상":
         sub.reward_status = "pending"  # 선생님 승인 후 적립
         sp.state = "pending"
+        sp.solution_revealed = False
         return
     if amount > 0:
         sub.reward_status = "credited"
-        db.add(Ledger(user_id=sub.user_id, amount=amount, kind="reward",
-                      submission_id=sub.id, kst_date=sub.kst_date,
-                      memo=f"#{sub.problem_id} {sub.problem.difficulty}" + (" 재도전" if sub.is_retry else "")))
+        _credit(db, sub, f"#{sub.problem_id} {sub.problem.difficulty}")
     else:
         sub.reward_status = "capped"
     sp.state = "solved"
@@ -282,46 +302,95 @@ def apply_grade(db, sub: Submission, score: int, feedback="", answer_read="", en
     sub.feedback, sub.answer_read, sub.engine = feedback, answer_read[:300], engine
     sub.status, sub.graded_at = "graded", now()
     sp = get_sp(db, sub.user_id, sub.problem_id)
+    if not _claim_result(db, sp):
+        sub.reward_status = "none"
+        sub.feedback = (sub.feedback + "\n이미 해결한 문제라 적립 없음").strip()
+        return
+    db.refresh(sp)
     if sub.score >= int(get_setting(db, "pass_score")):
         _apply_pass(db, sub, sp)
     else:
         _apply_fail(db, sp)
 
 
+def _claim_result(db, sp, states=("waiting", "open", "locked")):
+    # 진행 상태를 바꾸기 전에 행을 먼저 확보한다.
+    return db.execute(update(StudentProblem).where(
+        StudentProblem.id == sp.id, StudentProblem.state.in_(states)
+    ).values(state=StudentProblem.state).execution_options(synchronize_session=False)).rowcount
+
+
+def _take_pending(db, sub, status):
+    if sub.reward_status != "pending":
+        return False
+    changed = db.execute(update(Submission).where(
+        Submission.id == sub.id, Submission.reward_status == "pending"
+    ).values(reward_status=status).execution_options(synchronize_session=False)).rowcount
+    if changed:
+        db.refresh(sub)
+    return changed
+
+
 def approve(db, sub: Submission):
     """상 문제 승인 → 적립."""
-    if sub.reward_status != "pending":
+    if not _take_pending(db, sub, "credited"):
         return
     sp = get_sp(db, sub.user_id, sub.problem_id)
-    sub.reward_status = "credited"
-    db.add(Ledger(user_id=sub.user_id, amount=sub.reward_amount, kind="reward",
-                  submission_id=sub.id, kst_date=sub.kst_date,
-                  memo=f"#{sub.problem_id} 상 승인" + (" 재도전" if sub.is_retry else "")))
+    _credit(db, sub, f"#{sub.problem_id} 상 승인")
     sp.state = "solved"
 
 
 def reject(db, sub: Submission, note=""):
     """상 문제 반려 → 오답 1회로 처리."""
-    if sub.reward_status != "pending":
+    if not _take_pending(db, sub, "rejected"):
         return
     sp = get_sp(db, sub.user_id, sub.problem_id)
-    sub.reward_status, sub.reward_amount, sub.teacher_note = "rejected", 0, note
+    amount = sub.reward_amount
+    sub.reward_amount, sub.teacher_note = 0, note
     _apply_fail(db, sp)
+    if amount <= 0:
+        return
+    subject = sub.problem.subject
+    capped = (db.query(Submission).join(Problem).join(Unit)
+              .filter(Submission.user_id == sub.user_id, Submission.kst_date == sub.kst_date,
+                      Unit.subject == subject, Submission.status == "graded",
+                      (Submission.reward_status == "capped") |
+                      ((Submission.reward_status == "pending") & (Submission.reward_amount == 0)))
+              .order_by(Submission.id))
+    for other in capped:
+        if used_today(db, sub.user_id, sub.kst_date, subject) >= cap_of(db, subject):
+            break
+        if db.execute(update(Submission).where(
+            Submission.id == other.id, Submission.reward_status == other.reward_status,
+            Submission.reward_amount == 0
+        ).values(reward_amount=0).execution_options(synchronize_session=False)).rowcount:
+            _apply_pass(db, other, get_sp(db, other.user_id, other.problem_id))
 
 
 def resolve_appeal(db, sub: Submission, accept: bool, new_score=None, note=""):
-    """이의신청 처리 (요구사항 15). 인정 + 통과 점수면 실패 1회를 되돌리고 통과 처리."""
-    sub.teacher_note = note
+    """통과한 이의신청은 오답 한 번을 되돌린다."""
+    if sub.appeal_status != "open":
+        return
+    if accept and (type(new_score) is not int or not 0 <= new_score <= 100):
+        raise ValueError("새 점수는 0~100 정수로 입력해 주세요")
+    status = "accepted" if accept else "rejected"
+    if not db.execute(update(Submission).where(
+        Submission.id == sub.id, Submission.appeal_status == "open"
+    ).values(appeal_status=status).execution_options(synchronize_session=False)).rowcount:
+        return
+    sub.teacher_note, sub.appeal_status = note, status
     if not accept:
-        sub.appeal_status = "rejected"
         return
-    sub.appeal_status = "accepted"
-    if new_score is None:
-        return
-    was_pass = sub.passed
-    sub.score = max(0, min(100, int(new_score)))
-    sp = get_sp(db, sub.user_id, sub.problem_id)
-    if not was_pass and sub.passed and sp.state in ("open", "locked", "waiting"):
-        sp.fail_count = max(0, sp.fail_count - 1)
-        sp.locked_until = None
-        _apply_pass(db, sub, sp)
+    threshold = int(get_setting(db, "pass_score"))
+    was_wrong = sub.score is None or sub.score < threshold or sub.reward_status == "rejected"
+    sub.score = new_score
+    if was_wrong and new_score >= threshold:
+        sp = get_sp(db, sub.user_id, sub.problem_id)
+        if _claim_result(db, sp, ("open", "locked", "waiting", "pending", "solved")):
+            db.refresh(sp)
+            sp.fail_count = max(0, sp.fail_count - 1)
+            if sp.state in ("pending", "solved"):
+                sub.reward_status = "none"
+                return
+            sp.locked_until = None
+            _apply_pass(db, sub, sp)

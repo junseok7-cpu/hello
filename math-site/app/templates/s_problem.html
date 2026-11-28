@@ -6,7 +6,7 @@
   <h2>문제 #{{ p.id }}</h2>
   {{ problem_view(p) }}
   {{ howto(p) }}
-  <p class="reward">통과(90점 이상)하면 <b>{{ reward }}원</b>
+  <p class="reward">통과({{ pass_score }}점 이상)하면 <b>{{ reward }}원</b>
   {% if p.difficulty == '상' %} · 선생님 승인 후 적립{% endif %}</p>
 </section>
 
@@ -38,7 +38,7 @@
   <div class="thumbs">{% for i in s.images %}<a href="/blob/{{ i }}" target="_blank"><img src="/blob/{{ i }}"></a>{% endfor %}</div>
   {% if s.feedback %}<div class="feedback math">{{ s.feedback }}</div>{% endif %}
   {% if s.teacher_note %}<div class="feedback"><b>선생님:</b> {{ s.teacher_note }}</div>{% endif %}
-  {% if s.status == 'graded' and not s.passed and s.appeal_status == 'none' %}
+  {% if s.status == 'graded' and (s.score is none or s.score < pass_score or s.reward_status == 'rejected') and s.appeal_status == 'none' %}
   <details><summary>이의신청</summary>
     <form method="post" action="/s/appeal/{{ s.id }}">
       <textarea name="text" required placeholder="왜 채점이 틀렸다고 생각하는지 적어 주세요"></textarea>

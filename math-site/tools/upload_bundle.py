@@ -43,7 +43,7 @@ def main():
             unit_id=uid, difficulty=it["difficulty"], qtype=it.get("qtype", "essay"), body=it.get("body", ""),
             review_note=it.get("review_note", ""), image_kind=it.get("image_kind", "figure"), answer=it.get("answer", ""),
             solution=it.get("solution", ""), source=it.get("source", ""),
-            status="published" if a.publish else "draft"), files=files or None)
+            status="published" if a.publish else "draft", skip_if_exists=1), files=files or None)
         r.raise_for_status()
         ok += 1
     print(f"{ok}/{len(items)}개 등록 완료 ({'출제' if a.publish else '초안'})")

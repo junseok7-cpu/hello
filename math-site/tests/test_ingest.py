@@ -84,3 +84,78 @@ def test_pair_answers_by_section_and_order():
 
 def test_gaps():
     assert _gaps(["1", "2", "4", "6"]) == [3, 5]
+
+
+def test_pair_answers_reserves_exact_pairs_and_keeps_number_separators():
+    probs = [dict(number="01"), dict(section="A", number="1"),
+             dict(section="C", number="1"), dict(section="A", number="01-02"),
+             dict(section="A", number="1.2"), dict(section="A", number="12")]
+    answers = [dict(section="A", number="001"), dict(section="B", number="1"),
+               dict(section="A", number="1-2"), dict(section="A", number="1.2")]
+    assert pair_answers(probs, answers) == []
+    assert [p.get("_answer") for p in probs] == [answers[1], answers[0], None, answers[2], answers[3], None]
+
+
+def test_hwpx_keeps_inline_notes_and_shapes(tmp_path, monkeypatch):
+    import ingest
+
+    path = tmp_path / "notes.hwpx"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("Contents/section0.xml", """
+        <sec><p><run><t>앞<footNote><subList><p><run><t>각주</t></run></p></subList></footNote>중간</t>
+        <rect/><endNote><subList><p><run><t>미주</t></run></p></subList></endNote><t>뒤</t>
+        <container><ellipse/></container></run></p></sec>""")
+    pages, meta = docread.read_any(str(path), str(tmp_path))
+    assert "앞(주: 각주)중간 [도형: 원본 확인 필요] (주: 미주)뒤" in pages[0].text
+    assert meta["shapes"] == 3
+    monkeypatch.setattr(ingest.engines, "ask", lambda *args: {
+        "problems": [{"number": "1", "body": pages[0].text, "unit_id": 1}],
+    })
+    items, report = ingest.process([str(path)], "math", "중1", "교재",
+                                   [{"id": 1, "name": "단원"}], "codex", str(tmp_path))
+    assert "한글 도형 개체가 있어 그림이 빠졌을 수 있음 — 원본 확인" in items[0]["review_note"]
+    assert "'shapes': 3" in report
+
+
+def test_hwp_scripts_stay_attached_inside_fractions():
+    assert hwp_to_latex("x^2 over y") == r"\frac{x^{2}}{y}"
+    assert hwp_to_latex("a_n over 2") == r"\frac{a_{n}}{2}"
+    assert hwp_to_latex("x_i^2 over y_1") == r"\frac{x_{i}^{2}}{y_{1}}"
+
+
+def test_pdf_continuation_uses_previous_tail_and_stacks_crops(tmp_path, monkeypatch):
+    import ingest
+    from PIL import Image
+
+    pages = [docread.Page(no=i, source="book.pdf", text=t, image=f"p{i}.png", pdf=("book.pdf", i - 1))
+             for i, t in enumerate(("빼" + "앞" * 800, "뒷부분", "다른 쪽", "다시 시작"), 1)]
+    monkeypatch.setattr(docread, "read_any", lambda *args: (pages, {}))
+    prompts = []
+    results = iter([
+        {"problems": [dict(number="1", body="첫 구절", bbox=[0, 0, 90, 90], unit_id=1)]},
+        {"problems": [dict(number="01", body="첫 구절과 이어진 본문", bbox=[0, 0, 90, 90], unit_id=1)]},
+        {},
+        {"problems": [dict(number="1", body="연속하지 않는 문제", unit_id=1)]},
+    ])
+
+    def ask(engine, prompt, images, workdir):
+        prompts.append(prompt)
+        return next(results)
+
+    def crop(ref, bbox):
+        out = io.BytesIO()
+        Image.new("RGB", (12, 20), ("red", "blue")[ref[1]]).save(out, "PNG")
+        return out.getvalue()
+
+    monkeypatch.setattr(ingest.engines, "ask", ask)
+    monkeypatch.setattr(docread, "crop_pdf", crop)
+    items, _ = ingest.process(["book.pdf"], "math", "중1", "교재",
+                              [{"id": 1, "name": "단원"}], "codex", str(tmp_path))
+    assert "⟪앞 쪽의 끝부분(참고용)⟫" not in prompts[0]
+    assert "⟪앞 쪽의 끝부분(참고용)⟫\n" + "앞" * 800 + "\n" in prompts[1]
+    assert "빼" not in prompts[1]
+    assert [i["body"] for i in items] == ["첫 구절과 이어진 본문", "연속하지 않는 문제"]
+    assert items[0]["image_kind"] == "full"
+    im = Image.open(io.BytesIO(items[0]["image"]))
+    assert im.size == (12, 50)
+    assert im.getpixel((0, 0)) == (255, 0, 0) and im.getpixel((0, 49)) == (0, 0, 255)

@@ -12,16 +12,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const input = form.querySelector("input[type=file]");
     const box = form.querySelector(".previews");
     let files = [];
+    let generation = 0;
     input.addEventListener("change", async () => {
+      const current = ++generation;
+      const selected = [];
       files = [];
       box.innerHTML = "";
       for (const f of [...input.files].slice(0, 3)) {
         const small = await shrink(f, 1800).catch(() => f);
-        files.push(small);
+        if (current !== generation) return;
+        selected.push(small);
         const img = document.createElement("img");
         img.src = URL.createObjectURL(small);
         box.appendChild(img);
       }
+      files = selected;
     });
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -31,9 +36,18 @@ document.addEventListener("DOMContentLoaded", () => {
       const fd = new FormData();
       files.forEach((f, i) => fd.append("photos", f, `page${i + 1}.jpg`));
       fd.append("typed_answer", form.querySelector("[name=typed_answer]").value);
-      const r = await fetch(form.action, {method: "POST", body: fd});
-      if (r.ok || r.redirected) location.href = r.url || "/s?sent=1";
-      else { alert("제출 실패: " + (await r.text()).slice(0, 200)); btn.disabled = false; btn.textContent = "제출하기"; }
+      try {
+        const r = await fetch(form.action, {method: "POST", body: fd});
+        if (r.ok || r.redirected) {
+          location.href = r.url || "/s?sent=1";
+          return;
+        }
+        alert("제출 실패: " + (await r.text()).slice(0, 200));
+      } catch {
+        alert("제출 실패: 연결을 확인해 주세요");
+      }
+      btn.disabled = false;
+      btn.textContent = "제출하기";
     });
   });
 });

@@ -82,12 +82,14 @@ def test_hard_needs_approval_and_reserves_cap(db):
     s2 = submit(db, u, prob(db, "중2", "상"), 92)
     s3 = submit(db, u, prob(db, "중2", "상"), 92)
     s4 = submit(db, u, prob(db, "중2", "상"), 92)  # 300 이미 예약됨
-    assert s4.reward_status == "capped"
+    assert (s4.reward_status, s4.reward_amount) == ("pending", 0)
+    assert L.get_sp(db, u.id, s4.problem_id).state == "pending"
     L.approve(db, s1)
     assert L.balance(db, u.id) == 100
     L.reject(db, s2, "풀이 비약")
     sp = L.get_sp(db, u.id, s2.problem_id)
     assert sp.state == "open" and sp.fail_count == 1
+    assert (s4.reward_status, s4.reward_amount) == ("pending", 100)
     L.approve(db, s3)
     assert L.balance(db, u.id) == 200
 
@@ -118,9 +120,14 @@ def test_weak_unit_detection(db):
 
 def test_weak_hard_threshold(db):
     u = student(db)
-    for i in range(10):
-        submit(db, u, prob(db, "중2", "상", 2), 50 if i < 7 else 95)
-    assert unit(db, "중2", 2).id in L.weak_units(db, u.id)
+    subs = [submit(db, u, prob(db, "중2", "상", 2), 50 if i < 7 else 95) for i in range(10)]
+    uid = unit(db, "중2", 2).id
+    assert L.unit_stats(db, u.id)[uid]["상"] == [7, 7]
+    assert uid not in L.weak_units(db, u.id)
+    for sub in subs[7:]:
+        L.approve(db, sub)
+    assert L.unit_stats(db, u.id)[uid]["상"] == [10, 7]
+    assert uid in L.weak_units(db, u.id)
 
 
 def test_pick_prefers_weak(db):
@@ -165,10 +172,10 @@ def test_report_period():
 
 def test_report_collect(db):
     import json
-    from datetime import date
+    from datetime import date, datetime
     from app import reports as R
     u = student(db)
-    u.created_at = D.now() - timedelta(days=60)
+    u.created_at = datetime(2026, 11, 1)
     s1 = submit(db, u, prob(db, "중2", "중", 0), 95)
     s2 = submit(db, u, prob(db, "중2", "상", 1), 40)
     for s in (s1, s2):
@@ -234,3 +241,205 @@ def test_current_problem_per_subject(db):
     assert L.current_problem(db, u, "math").id == m.id
     assert L.current_problem(db, u, "science").id == sc.id
     assert L.can_submit(db, u, m.id) and L.can_submit(db, u, sc.id)
+
+
+@pytest.mark.parametrize("difficulty", ["하", "상"])
+def test_appeal_and_waiting_grade_credit_once(db, difficulty):
+    u = student(db)
+    p = prob(db, u.grade, difficulty)
+    first = submit(db, u, p, 60)
+    first.appeal_status = "open"
+    retry = L.create_submission(db, u, p, [])
+    L.resolve_appeal(db, first, True, 95)
+    sp = L.get_sp(db, u.id, p.id)
+    assert sp.fail_count == 0
+    assert sp.state == ("pending" if difficulty == "상" else "solved")
+    L.apply_grade(db, retry, 99, "풀이 확인")
+    assert (retry.score, retry.status, retry.reward_status) == (99, "graded", "none")
+    assert retry.feedback.endswith("이미 해결한 문제라 적립 없음")
+    L.approve(db, first)
+    L.approve(db, first)
+    L.reject(db, first)
+    assert sp.state == "solved" and sp.fail_count == 0
+    assert db.query(D.Ledger.submission_id).all() == [(first.id,)]
+
+
+def test_rejected_appeal_uses_configured_pass_score(db):
+    u = student(db)
+    D.set_setting(db, "pass_score", "80")
+    sub = submit(db, u, prob(db, u.grade, "상"), 82)
+    sp = L.get_sp(db, u.id, sub.problem_id)
+    L.reject(db, sub, "반려")
+    L.resolve_appeal(db, sub, True, 84)
+    assert (sub.appeal_status, sub.teacher_note, sub.score) == ("none", "반려", 82)
+    sub.appeal_status = "open"
+    L.resolve_appeal(db, sub, True, 84)
+    assert (sub.appeal_status, sub.reward_status, sp.state, sp.fail_count) == ("accepted", "pending", "pending", 0)
+    L.resolve_appeal(db, sub, False, note="다시 처리")
+    assert sub.appeal_status == "accepted" and sub.teacher_note == ""
+
+
+def test_reward_submission_unique_and_manual_ledger_allows_null(db):
+    from sqlalchemy.exc import IntegrityError
+    u = student(db)
+    sub = submit(db, u, prob(db, u.grade, "하"), 95)
+    db.add_all([D.Ledger(user_id=u.id, amount=-1, kind="payout") for _ in range(2)])
+    db.flush()
+    with pytest.raises(IntegrityError), db.begin_nested():
+        db.add(D.Ledger(user_id=u.id, amount=10, submission_id=sub.id))
+        db.flush()
+    assert L.balance(db, u.id) == 8
+
+
+def test_reject_resettles_same_student_subject_and_day_in_order(db):
+    u, other = student(db), student(db)
+    D.set_setting(db, "cap_math", "15")
+    D.set_setting(db, "cap_science", "0")
+    reserved = submit(db, u, prob(db, u.grade, "상"), 90)
+    next_day = submit(db, u, prob(db, u.grade, "하"), 90)
+    next_day.kst_date = "2000-01-01"
+    first, second, third = [submit(db, u, prob(db, u.grade, "하"), 90) for _ in range(3)]
+    science = submit(db, u, prob(db, u.grade, "하", subject="science"), 90)
+    other_reserved = submit(db, other, prob(db, u.grade, "상"), 90)
+    other_capped = submit(db, other, prob(db, u.grade, "하"), 90)
+    L.reject(db, reserved)
+    assert [(s.reward_status, s.reward_amount) for s in (first, second, third)] == [
+        ("credited", 10), ("credited", 5), ("capped", 0)]
+    assert all(s.reward_status == "capped" for s in (next_day, science, other_capped))
+    assert other_reserved.reward_amount == 15
+    L.reject(db, reserved)
+    assert L.balance(db, u.id) == 15
+
+
+def test_zero_reward_hard_approval_solves_without_ledger(db):
+    u = student(db)
+    D.set_setting(db, "cap_math", "0")
+    s = submit(db, u, prob(db, u.grade, "상"), 99)
+    sp = L.get_sp(db, u.id, s.problem_id)
+    assert (s.reward_status, s.reward_amount, sp.state, sp.solution_revealed) == ("pending", 0, "pending", False)
+    L.approve(db, s)
+    assert sp.state == "solved" and db.query(D.Ledger).count() == 0
+
+
+def test_can_submit_checks_publication_scope_and_waiting(db):
+    u = student(db)
+    p = prob(db, u.grade, "하")
+    u.current_problem_id = p.id
+    assert L.can_submit(db, u, p.id)
+    p.status = "draft"
+    assert not L.can_submit(db, u, p.id)
+    p.status = "published"
+    L.create_submission(db, u, p, [])
+    assert not L.can_submit(db, u, p.id)
+    sc = prob(db, "중1", "상", subject="science")
+    u.current_sci_id = sc.id
+    assert not L.can_submit(db, u, sc.id)
+
+
+def test_unit_stats_deduplicate_and_keep_any_wrong_attempt(db):
+    u = student(db)
+    p = prob(db, u.grade, "중")
+    submit(db, u, p, 50)
+    submit(db, u, p, 75)
+    submit(db, u, p, 95)
+    L.create_submission(db, u, prob(db, u.grade, "중"), [])
+    s = submit(db, u, prob(db, u.grade, "상"), 90)
+    submit(db, u, prob(db, u.grade, "상"), 90)
+    L.reject(db, s)
+    assert L.unit_stats(db, u.id)[p.unit_id] == {"하": [0, 0], "중": [1, 1], "상": [1, 1]}
+
+
+def test_reports_fill_missing_periods_oldest_first(db):
+    import json
+    from datetime import date, datetime
+    from app import reports as R
+
+    u = student(db)
+    u.created_at = datetime(2025, 12, 28)
+    db.add(D.Report(user_id=u.id, period_start="2025-11-28", period_end="2025-12-27"))
+    sub = submit(db, u, prob(db, u.grade, "하"), 92)
+    sub.kst_date = "2026-01-10"
+    assert R.ensure_reports(db, date(2026, 3, 28)) == 3
+    reports = db.query(D.Report).order_by(D.Report.id).all()
+    assert [r.period_end for r in reports] == ["2025-12-27", "2026-01-27", "2026-02-27", "2026-03-27"]
+    assert json.loads(reports[2].data)["subjects"]["math"]["prev_pass_rate"] == 100
+    assert R.ensure_reports(db, date(2026, 3, 28)) == 0
+
+
+def test_reports_start_with_student_first_period(db):
+    from datetime import date, datetime
+    from app import reports as R
+
+    u = student(db)
+    u.created_at = datetime(2026, 1, 28)
+    assert R.ensure_reports(db, date(2026, 3, 28)) == 2
+    assert db.query(D.Report.period_end).order_by(D.Report.period_end).all() == [
+        ("2026-02-27",), ("2026-03-27",)]
+
+
+def test_report_duplicate_does_not_prevent_later_period(db, monkeypatch):
+    from datetime import date, datetime
+    from app import reports as R
+
+    u = student(db)
+    u.created_at = datetime(2026, 1, 1)
+    original = R.collect
+
+    def collect_with_conflict(db, user, start, end):
+        if end == "2026-01-27":
+            db.add(D.Report(user_id=user.id, period_start=start, period_end=end))
+            db.flush()
+        return original(db, user, start, end)
+
+    monkeypatch.setattr(R, "collect", collect_with_conflict)
+    assert R.ensure_reports(db, date(2026, 2, 28)) == 1
+    assert db.query(D.Report.period_end).one() == ("2026-02-27",)
+
+
+@pytest.mark.parametrize("duplicate_ledger", [False, True])
+def test_startup_migrates_legacy_sqlite(db, monkeypatch, duplicate_ledger):
+    from sqlalchemy import inspect, text
+
+    u = student(db)
+    sub = submit(db, u, prob(db, u.grade, "하"), 95)
+    db.commit()
+    eng = db.get_bind()
+    with eng.begin() as conn:
+        conn.execute(text("DROP INDEX uq_ledger_submission"))
+        conn.execute(text("ALTER TABLE submissions DROP COLUMN retry_count"))
+        if duplicate_ledger:
+            conn.execute(text(
+                "INSERT INTO ledger (user_id, amount, submission_id) VALUES (:uid, 10, :sid)"
+            ), {"uid": u.id, "sid": sub.id})
+    monkeypatch.setattr(D, "engine", eng)
+    monkeypatch.setattr(D, "SessionLocal", sessionmaker(bind=eng))
+    D.init_db()
+    assert any(c["name"] == "retry_count" for c in inspect(eng).get_columns("submissions"))
+    assert db.execute(text("SELECT retry_count FROM submissions")).scalar_one() == 0
+    assert bool(inspect(eng).get_indexes("ledger")) == (not duplicate_ledger)
+    assert db.query(D.Ledger).count() == (2 if duplicate_ledger else 1)
+
+
+def test_appeal_winning_before_resubmission_cannot_reopen_problem(db):
+    u = student(db)
+    p = prob(db, u.grade, "하")
+    first = submit(db, u, p, 40)
+    assert L.can_submit(db, u, p.id)
+    first.appeal_status = "open"
+    L.resolve_appeal(db, first, True, 95)
+    with pytest.raises(ValueError):
+        L.create_submission(db, u, p, [])
+    assert L.get_sp(db, u.id, p.id).state == "solved"
+    assert db.query(D.Submission).count() == 1 and L.balance(db, u.id) == 10
+
+
+def test_passing_grade_before_appeal_does_not_credit_twice(db):
+    u = student(db)
+    p = prob(db, u.grade, "하")
+    first = submit(db, u, p, 50)
+    first.appeal_status = "open"
+    second = submit(db, u, p, 95)
+    L.resolve_appeal(db, first, True, 91)
+    assert (first.appeal_status, first.score, first.reward_status) == ("accepted", 91, "none")
+    assert L.get_sp(db, u.id, p.id).fail_count == 0
+    assert db.query(D.Ledger.submission_id).all() == [(second.id,)]

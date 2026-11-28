@@ -44,6 +44,10 @@ tpl.env.globals.update(GRADES=GRADES, DIFFS=DIFFS, SUBJECTS=SUBJECTS, QTYPES=QTY
 
 @app.on_event("startup")
 def _startup():
+    secrets = ((SECRET_KEY, "dev-secret-change-me"), (TEACHER_PASSWORD, "teacher"),
+               (GRADER_TOKEN, "dev-grader-token"))
+    if BASE_URL.startswith("https") and any(not value.strip() or value == default for value, default in secrets):
+        raise RuntimeError("운영용 비밀값을 모두 설정해 주세요")
     init_db()
 
 
@@ -96,7 +100,7 @@ def has_access(request):
 
 @app.get("/join/{key}")
 def join(key: str, request: Request):
-    if ACCESS_KEY and hmac.compare_digest(key, ACCESS_KEY):
+    if ACCESS_KEY and hmac.compare_digest(key.encode(), ACCESS_KEY.encode()):
         request.session["access"] = ACCESS_KEY
         return back("/login-page")
     raise HTTPException(404)
@@ -121,7 +125,7 @@ def login(request: Request, name: str = Form(...), db=Depends(get_db)):
 
 @app.post("/teacher-login")
 def teacher_login(request: Request, password: str = Form(...), db=Depends(get_db)):
-    if not hmac.compare_digest(password, TEACHER_PASSWORD):
+    if not hmac.compare_digest(password.encode(), TEACHER_PASSWORD.encode()):
         return back("/login-page?msg=" + quote("비밀번호가 틀렸어요"))
     u = db.query(User).filter_by(role="teacher").first()
     if not u:
@@ -167,8 +171,9 @@ def save_image(db, data: bytes, max_side=1800) -> int:
 def can_see_blob(db, u: User, blob_id: int) -> bool:
     if u.role == "teacher":
         return True
-    if db.query(Problem).filter(Problem.image_id == blob_id, Problem.status == "published").count():
-        return True
+    for p in db.query(Problem).filter_by(image_id=blob_id):
+        if logic.is_current(u, p.id) or logic.get_sp(db, u.id, p.id):
+            return True
     p = db.query(Problem).filter(Problem.solution_image_id == blob_id).first()
     if p:
         sp = logic.get_sp(db, u.id, p.id)
@@ -233,29 +238,30 @@ def s_problem(pid: int, request: Request, u: User = Depends(current_user), db=De
         raise HTTPException(403, "아직 받지 않은 문제예요")
     subs = (db.query(Submission).filter_by(user_id=u.id, problem_id=pid)
             .order_by(Submission.id.desc()).all())
+    pass_score = int(get_setting(db, "pass_score"))
     show_solution = bool(sp and (sp.solution_revealed or sp.state == "solved"))
     base = logic.base_reward(db, p)
     retry = bool(sp and (sp.is_retry or sp.state == "locked"))
     return render(request, "s_problem.html", p=p, sp=sp, subs=subs,
                   can_submit=logic.can_submit(db, u, pid), show_solution=show_solution,
-                  reward=base // 2 if retry else base, QTYPES=QTYPES,
+                  reward=base // 2 if retry else base, QTYPES=QTYPES, pass_score=pass_score,
                   max_fails=int(get_setting(db, "max_fails")), **student_ctx(db, u, p.subject))
 
 
 @app.post("/s/p/{pid}/submit")
 async def s_submit(pid: int, photos: list[UploadFile] = File(...), typed_answer: str = Form(""),
                    u: User = Depends(current_user), db=Depends(get_db)):
+    photos_data = [await f.read() for f in photos[:3]]
     p = db.get(Problem, pid)
     if not p or not logic.can_submit(db, u, pid):
         raise HTTPException(400, "지금은 이 문제를 제출할 수 없어요")
-    ids = []
-    for f in photos[:3]:
-        data = await f.read()
-        if data:
-            ids.append(save_image(db, data))
+    ids = [save_image(db, data) for data in photos_data if data]
     if not ids:
         raise HTTPException(400, "풀이 사진을 올려 주세요")
-    logic.create_submission(db, u, p, ids, typed_answer)
+    try:
+        logic.create_submission(db, u, p, ids, typed_answer)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     db.commit()
     return back(f"/s?subject={p.subject}&sent=1")
 
@@ -272,6 +278,8 @@ def s_skip(subject: str = Form("math"), u: User = Depends(current_user), db=Depe
 def s_appeal(sid: int, text: str = Form(...), u: User = Depends(current_user), db=Depends(get_db)):
     s = db.get(Submission, sid)
     if not s or s.user_id != u.id or s.status != "graded" or s.appeal_status != "none":
+        raise HTTPException(400)
+    if s.reward_status != "rejected" and s.score is not None and s.score >= int(get_setting(db, "pass_score")):
         raise HTTPException(400)
     s.appeal_status, s.appeal_text = "open", text[:1000]
     db.commit()
@@ -342,6 +350,8 @@ def t_approvals(request: Request, u: User = Depends(teacher), db=Depends(get_db)
 def t_approve(sid: int, action: str = Form(...), note: str = Form(""),
               u: User = Depends(teacher), db=Depends(get_db)):
     s = db.get(Submission, sid)
+    if s is None:
+        raise HTTPException(404)
     if action == "approve":
         logic.approve(db, s)
     else:
@@ -360,8 +370,15 @@ def t_appeals(request: Request, u: User = Depends(teacher), db=Depends(get_db)):
 def t_appeal(sid: int, action: str = Form(...), new_score: str = Form(""), note: str = Form(""),
              u: User = Depends(teacher), db=Depends(get_db)):
     s = db.get(Submission, sid)
-    score = int(new_score) if new_score.strip().isdigit() else None
-    logic.resolve_appeal(db, s, action == "accept", score, note)
+    if s is None:
+        raise HTTPException(404)
+    if s.appeal_status != "open":
+        return back("/t/appeals")
+    try:
+        score = int(new_score) if action == "accept" else None
+        logic.resolve_appeal(db, s, action == "accept", score, note)
+    except ValueError:
+        raise HTTPException(400, "새 점수는 0~100 정수로 입력해 주세요")
     db.commit()
     return back("/t/appeals")
 
@@ -386,6 +403,8 @@ def t_student_add(name: str = Form(...), grade: str = Form(...), u: User = Depen
 def t_student_update(sid: int, grade: str = Form(""), active: str = Form("1"), name: str = Form(""),
                      u: User = Depends(teacher), db=Depends(get_db)):
     st = db.get(User, sid)
+    if st is None:
+        raise HTTPException(404)
     name = " ".join(name.split())
     if name and name != st.name and not db.query(User).filter_by(role="student", name=name).first():
         st.name = name
@@ -408,6 +427,8 @@ def t_ledger(sid: int, amount: int = Form(...), kind: str = Form("payout"), memo
 @app.get("/t/student/{sid}", response_class=HTMLResponse)
 def t_student(sid: int, request: Request, u: User = Depends(teacher), db=Depends(get_db)):
     st = db.get(User, sid)
+    if st is None:
+        raise HTTPException(404)
     subs = db.query(Submission).filter_by(user_id=sid).order_by(Submission.id.desc()).limit(60).all()
     ledger = db.query(Ledger).filter_by(user_id=sid).order_by(Ledger.id.desc()).limit(60).all()
     matrix = {k: weak_matrix(db, [st], k) for k in SUBJECTS}
@@ -418,13 +439,21 @@ def t_student(sid: int, request: Request, u: User = Depends(teacher), db=Depends
 @app.get("/t/sub/{sid}", response_class=HTMLResponse)
 def t_sub(sid: int, request: Request, u: User = Depends(teacher), db=Depends(get_db)):
     s = db.get(Submission, sid)
+    if s is None:
+        raise HTTPException(404)
     return render(request, "t_review.html", user=u, subs=[s], mode="view", title=f"제출 #{sid}")
 
 
 @app.post("/t/sub/{sid}/regrade")
 def t_regrade(sid: int, u: User = Depends(teacher), db=Depends(get_db)):
     s = db.get(Submission, sid)
+    if s is None:
+        raise HTTPException(404)
     if s.status == "error":
+        sp = logic.get_sp(db, s.user_id, s.problem_id)
+        newer = db.query(Submission).filter_by(user_id=s.user_id, problem_id=s.problem_id).filter(Submission.id > sid)
+        if sp and sp.state == "open" and not newer.first():
+            sp.state = "waiting"
         s.status = "queued"
         db.commit()
     return back(f"/t/sub/{sid}")
@@ -592,13 +621,18 @@ def t_report_view(request: Request, end: str = "", student: int = 0, preview: in
         if student:
             q = q.filter_by(user_id=student)
         for r in q.join(User).order_by(User.grade, User.name):
-            items.append(dict(d=json.loads(r.data), comment=r.ai_comment, status=r.status, id=r.id))
+            data = reports.collect(db, r.user, r.period_start, r.period_end)
+            r.data = json.dumps(data, ensure_ascii=False)
+            items.append(dict(d=data, comment=r.ai_comment, status=r.status, id=r.id))
+        db.commit()
     return render(request, "t_report.html", user=u, items=items, preview=preview)
 
 
 @app.post("/t/reports/{rid}/comment")
 def t_report_comment(rid: int, comment: str = Form(""), u: User = Depends(teacher), db=Depends(get_db)):
     r = db.get(Report, rid)
+    if r is None:
+        raise HTTPException(404)
     r.ai_comment, r.status = comment, "done"
     db.commit()
     return back(f"/t/reports/view?end={r.period_end}")
@@ -621,6 +655,18 @@ def t_settings(request: Request, u: User = Depends(teacher), db=Depends(get_db))
 @app.post("/t/settings")
 async def t_settings_save(request: Request, u: User = Depends(teacher), db=Depends(get_db)):
     form = await request.form()
+    ratios = {"mid_wrong", "hi_wrong", "weak_ratio"}
+    try:
+        for k in DEFAULT_SETTINGS.keys() - {"last_grader_seen", "engine"}:
+            if k not in form:
+                continue
+            if k in ratios:
+                if not 0 <= float(form[k]) <= 1:
+                    raise ValueError
+            else:
+                int(form[k])
+    except (TypeError, ValueError):
+        raise HTTPException(400, "숫자 설정은 정수, 비율은 0~1로 입력해 주세요")
     for k in DEFAULT_SETTINGS:
         if k in form and k != "last_grader_seen":
             set_setting(db, k, form[k])
@@ -632,8 +678,8 @@ async def t_settings_save(request: Request, u: User = Depends(teacher), db=Depen
 
 def grader(request: Request):
     tok = request.headers.get("X-Grader-Token", "")
-    if not hmac.compare_digest(tok, GRADER_TOKEN):
-        raise HTTPException(401, "bad grader token")
+    if not hmac.compare_digest(tok.encode(), GRADER_TOKEN.encode()):
+        raise HTTPException(401, "채점 토큰이 맞지 않아요")
 
 
 def _seen(db):
@@ -696,14 +742,33 @@ def g_blob(bid: int, db=Depends(get_db)):
 
 @app.post("/api/grader/result/{sid}", dependencies=[Depends(grader)])
 async def g_result(sid: int, request: Request, db=Depends(get_db)):
-    data = await request.json()
     s = db.get(Submission, sid)
-    if not s or s.status == "graded":
+    if s is None:
+        raise HTTPException(404)
+    try:
+        data = await request.json()
+    except ValueError:
+        raise HTTPException(400, "채점 결과 형식을 확인해 주세요")
+    db.refresh(s)
+    if s.status in ("graded", "error"):
         return dict(ok=False)
+    if not isinstance(data, dict):
+        raise HTTPException(400, "채점 결과 형식을 확인해 주세요")
     if data.get("error"):
-        s.status, s.feedback = "error", "채점 오류: " + str(data["error"])[:500]
+        if s.retry_count == 0:
+            s.status, s.retry_count = "queued", 1
+        else:
+            s.status, s.feedback = "error", "채점 오류 — 다시 제출해 주세요"
+            newer = (db.query(Submission).filter_by(user_id=s.user_id, problem_id=s.problem_id)
+                     .filter(Submission.id > s.id))
+            if not newer.first():
+                db.query(StudentProblem).filter_by(user_id=s.user_id, problem_id=s.problem_id,
+                                                   state="waiting").update({"state": "open"})
     else:
-        logic.apply_grade(db, s, int(data["score"]), data.get("feedback", ""),
+        score = data.get("score")
+        if type(score) is not int or not 0 <= score <= 100:
+            raise HTTPException(400, "점수는 0~100 정수여야 해요")
+        logic.apply_grade(db, s, score, data.get("feedback", ""),
                           data.get("answer_read", ""), data.get("engine", ""),
                           data.get("errors", ""))
     _seen(db)
@@ -726,10 +791,14 @@ def g_units(grade: str = "", subject: str = "", db=Depends(get_db)):
 async def g_problem(unit_id: int = Form(...), difficulty: str = Form(...), body: str = Form(""),
                     qtype: str = Form("essay"), review_note: str = Form(""), image_kind: str = Form("figure"),
                     answer: str = Form(""), solution: str = Form(""), source: str = Form(""),
-                    status: str = Form("draft"), job_id: int = Form(0),
+                    status: str = Form("draft"), job_id: int = Form(0), skip_if_exists: int = Form(0),
                     image: UploadFile | None = File(None), sol_image: UploadFile | None = File(None),
                     db=Depends(get_db)):
     """문제 1개 등록 (PDF 자동 분류 결과 또는 Claude가 만든 묶음 업로드)."""
+    if skip_if_exists and source:
+        existing = db.query(Problem).filter_by(source=source).order_by(Problem.id).first()
+        if existing:
+            return dict(id=existing.id)
     if difficulty not in DIFFS or not db.get(Unit, unit_id):
         raise HTTPException(400, "unit/difficulty")
     p = Problem(unit_id=unit_id, difficulty=difficulty, body=body, answer=answer, solution=solution,
@@ -746,10 +815,28 @@ async def g_problem(unit_id: int = Form(...), difficulty: str = Form(...), body:
     return dict(id=p.id)
 
 
+@app.post("/api/grader/import/{jid}/reset", dependencies=[Depends(grader)])
+def g_import_reset(jid: int, db=Depends(get_db)):
+    if db.get(ImportJob, jid) is None:
+        raise HTTPException(404)
+    drafts = db.query(Problem).filter(
+        Problem.import_job_id == jid, Problem.status == "draft",
+        ~db.query(Submission).filter(Submission.problem_id == Problem.id).exists())
+    for p in drafts:
+        db.query(StudentProblem).filter_by(problem_id=p.id).delete()
+        db.query(User).filter_by(current_problem_id=p.id).update({"current_problem_id": None})
+        db.query(User).filter_by(current_sci_id=p.id).update({"current_sci_id": None})
+        db.delete(p)
+    db.commit()
+    return dict(ok=True)
+
+
 @app.post("/api/grader/import/{jid}", dependencies=[Depends(grader)])
 async def g_import_done(jid: int, request: Request, db=Depends(get_db)):
-    data = await request.json()
     j = db.get(ImportJob, jid)
+    if j is None:
+        raise HTTPException(404)
+    data = await request.json()
     j.status = "error" if data.get("error") else "done"
     j.log = str(data.get("log", ""))[:5000]
     j.report = str(data.get("report", ""))[:20000]
@@ -760,8 +847,10 @@ async def g_import_done(jid: int, request: Request, db=Depends(get_db)):
 
 @app.post("/api/grader/report/{rid}", dependencies=[Depends(grader)])
 async def g_report(rid: int, request: Request, db=Depends(get_db)):
-    data = await request.json()
     r = db.get(Report, rid)
+    if r is None:
+        raise HTTPException(404)
+    data = await request.json()
     if data.get("error"):
         r.status = "error"  # 총평 없이 통계만 보여 준다 (선생님이 직접 써도 됨)
     else:

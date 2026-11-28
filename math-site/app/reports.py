@@ -7,6 +7,7 @@ import json
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from . import logic
 from .db import KST, SUBJECTS, Ledger, Report, Submission, Unit, User, get_setting
@@ -97,17 +98,25 @@ def collect(db, user: User, start: str, end: str) -> dict:
 
 def ensure_reports(db, today: date | None = None) -> int:
     """만들 차례인 보고서가 있으면 만든다. 새로 만든 개수를 돌려준다."""
-    start, end = latest_period(today or today_kst())
+    latest_start, latest_end = latest_period(today or today_kst())
     made = 0
     for u in db.query(User).filter(User.role == "student", User.active.is_(True),
                                    User.grade.isnot(None)).all():
-        if u.created_at and (u.created_at + timedelta(hours=9)).date().isoformat() > end:
-            continue  # 기간이 끝난 뒤에 등록된 학생
-        if db.query(Report).filter_by(user_id=u.id, period_end=end).first():
-            continue
-        db.add(Report(user_id=u.id, period_start=start, period_end=end,
-                      data=json.dumps(collect(db, u, start, end), ensure_ascii=False)))
-        made += 1
-    if made:
-        db.flush()
+        created = (u.created_at + timedelta(hours=9)).date().isoformat() if u.created_at else ""
+        last = db.query(func.max(Report.period_end)).filter_by(user_id=u.id).scalar()
+        start, end = latest_start, latest_end
+        if last or created:
+            previous_end = last or latest_period(_d(created))[1]
+            # 27일에서 32일 뒤면 다음 보고 기간이 끝나 있다.
+            start, end = latest_period(_d(previous_end) + timedelta(days=32))
+        while end <= latest_end:
+            if end >= created:
+                try:
+                    with db.begin_nested():
+                        db.add(Report(user_id=u.id, period_start=start, period_end=end,
+                                      data=json.dumps(collect(db, u, start, end), ensure_ascii=False)))
+                    made += 1
+                except IntegrityError:
+                    pass
+            start, end = latest_period(_d(end) + timedelta(days=32))
     return made
