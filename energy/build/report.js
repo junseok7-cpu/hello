@@ -56,7 +56,7 @@ const push = (...x) => x.flat().forEach(e => body.push(e));
 push(
   new Paragraph({ spacing: { before: 2400 }, children: [t('인공지능과 디지털 사고 · 팀 프로젝트 최종보고서', { size: 22, color: TEAL, bold: true })] }),
   new Paragraph({ spacing: { before: 240, after: 120 }, children: [t('발전원별 AI 예측·관리 시스템', { size: 52, bold: true, color: INK })] }),
-  new Paragraph({ spacing: { after: 600 }, children: [t('— 공공데이터 50종으로 본 발전원별 예측과 이상 후보 알림 —', { size: 28, color: '3C4A55' })] }),
+  new Paragraph({ spacing: { after: 600 }, children: [t('— 수요에 맞춘 발전 계획과 발전원별 예측·이상 후보 알림 —', { size: 28, color: '3C4A55' })] }),
   P([t('제출일: 2026년 12월 1일', { size: 22 })]),
   P([t('팀명: ____________    팀원: ____________ / ____________ / ____________ / ____________', { size: 22 })]),
   new Paragraph({ children: [new PageBreak()] }),
@@ -281,6 +281,15 @@ push(H1('7. 이상탐지와 추종 분석'),
   H2('7.7 지열·바이오에도 같은 방법을'),
   P(`국립세종수목원 지열 히트펌프의 시간별 운전 기록(${P1.geothermal.period}, ${P1.geothermal.buildings.length}개 건물)에서 생산 열량을 소비 전력으로 나눈 효율(COP)은 운전 중 중앙값 ${P1.geothermal.cop_median}였다. 건물별로 앞선 유효 관측일 28개의 중앙값과 비교해 효율이 30% 넘게 낮은 날을 표시하니, 판정한 건물·날짜 기록 ${Object.values(P1.geothermal.judged_days).reduce((a, v) => a + v, 0).toLocaleString()}건 중 ${Object.values(P1.geothermal.cop_drop_alert_days).reduce((a, v) => a + v, 0)}건이었다. 광주 하수처리장 소화조의 바이오가스 생산량에서는 평소보다 40% 이상 줄어든 날이 ${P3.biogas_digester.alert_days}일이었다. 바이오 연료 분석 ${P1.biomass.samples}건에서는 수분이 많을수록 발열량이 낮았다(순위 상관 ${P1.biomass.spearman_moisture_heating_value}). 운전 데이터만 있으면 연료전지와 같은 "이상 후보 알림"을 지열·바이오에도 쓸 수 있다.`),
   ...FIG('f13_geothermal.png', '국립세종수목원 지열 히트펌프 일별 COP와 입수온도', 6.4),
+);
+
+// ── 7-2. 사용량에 따른 발전 계획 AI (목표)
+const PLn = R.plan;
+push(H2('7.8 사용량(수요)에 맞춘 발전 계획 AI'),
+  P(`본 과제의 목표는 전기를 얼마나 쓸지(수요)를 미리 알고, 그에 맞춰 발전 계획을 세우고, 발전원별 발전량을 예측해 낭비 없이 생산하는 것이다. 2025년 시간별 전국 전력수요와 태양광·풍력 거래량으로 시제품을 만들었다. 전날 14시에 ① 내일 수요, ② 내일 태양광·풍력을 예측하고, ③ 수요에서 태양광·풍력을 뺀 순수요(나머지 발전소가 채울 양)를 구한 뒤, ④ 원자력(설비 ${PLn.plan.nuclear_basis.split(' ')[2]} MW × 2025 이용률 중앙값, 약 ${PLn.plan.nuclear_MW.toLocaleString()} MW로 가정)을 먼저 놓고 나머지를 출력을 조절할 수 있는 발전(석탄·LNG 등)으로 채운다. AI는 수요의 절대 크기 대신 "이틀 전 하루 평균 대비 비율"을 배우게 하고, 매달 그 전날까지의 자료로 다시 학습하였다(처음에 수요 자체를 1~8월 자료로 학습했을 때는 9~12월 수준을 맞추지 못해 기준보다 나빴다).`),
+  P(`2025년 9~12월 시험에서 수요 예측 오차(평균 절대 백분율)는 지난주 같은 시각 값을 그대로 쓰는 방법 ${PLn.demand['지난주 같은 시각'].MAPE_pct}%에서 AI ${PLn.demand.AI.MAPE_pct}%로 줄었다. 예측이 틀릴 때를 대비해 대기해야 하는 발전량(시간의 95%를 버티는 크기)은 순수요 기준 ${PLn.net['지난주 같은 시각'].reserve_P95_MW.toLocaleString()} MW에서 ${PLn.net.AI.reserve_P95_MW.toLocaleString()} MW로 약 ${PLn.reserve_saving_MW.toLocaleString()} MW 줄었고, 실제보다 많이 준비한 전력량은 ${PLn.over_saving_GWh.toLocaleString()} GWh 줄었다. 태양광·풍력은 날씨 예보 없이 과거 값만 써서 기준과 비슷했다(태양광 설비용량 대비 오차 ${PLn.solar.AI_nMAE_pct}% vs ${PLn.solar['지난주_nMAE_pct']}%, 풍력 ${PLn.wind.AI_nMAE_pct}% vs ${PLn.wind['지난주_nMAE_pct']}%). 발전기별 비용·기동 제약을 반영하지 않은 시제품이며, 날씨 예보와 시간별 SMP를 넣는 것이 다음 단계다.`),
+  ...FIG('f27_plan_day.png', `${PLn.example_day} 발전 계획(전날 14시 작성)과 순수요 예측`, 6.4),
+  ...FIG('f28_plan_reserve.png', '예측이 틀릴 때를 대비해 대기할 발전량과 실제보다 많이 준비한 전력량', 6.0),
 );
 
 // ── 8. 공공데이터 50종으로 확인한 근거

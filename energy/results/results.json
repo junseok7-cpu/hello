@@ -2273,5 +2273,85 @@
    "15065266": "한국전력거래소_시간별 전국 전력수요량",
    "15151942": "광주환경공단_1하수관리처_혐기성 소화조 운영 데이터"
   }
+ },
+ "plan": {
+  "period_train": "2025-01-09부터 매달 직전까지 (매달 다시 학습)",
+  "period_test": "2025-09-01~2025-12-31",
+  "test_hours": 2928,
+  "demand": {
+   "AI": {
+    "MAE_MW": 2563,
+    "RMSE_MW": 3511,
+    "MAPE_pct": 4.08,
+    "reserve_P95_MW": 7130,
+    "over_GWh": 3978.4,
+    "under_GWh": 3527.5
+   },
+   "지난주 같은 시각": {
+    "MAE_MW": 3730,
+    "RMSE_MW": 5501,
+    "MAPE_pct": 6.03,
+    "reserve_P95_MW": 11879,
+    "over_GWh": 6217.8,
+    "under_GWh": 4703.1
+   }
+  },
+  "net": {
+   "AI": {
+    "MAE_MW": 2775,
+    "RMSE_MW": 3884,
+    "MAPE_pct": 4.59,
+    "reserve_P95_MW": 8119,
+    "over_GWh": 4079.2,
+    "under_GWh": 4046.8
+   },
+   "지난주 같은 시각": {
+    "MAE_MW": 3960,
+    "RMSE_MW": 5813,
+    "MAPE_pct": 6.65,
+    "reserve_P95_MW": 13102,
+    "over_GWh": 6550.3,
+    "under_GWh": 5044.0
+   }
+  },
+  "solar": {
+   "AI_nMAE_pct": 4.07,
+   "지난주_nMAE_pct": 4.24
+  },
+  "wind": {
+   "AI_nMAE_pct": 13.34,
+   "지난주_nMAE_pct": 12.4
+  },
+  "reserve_saving_MW": 4983,
+  "over_saving_GWh": 2471.1,
+  "net_offday": {
+   "AI": {
+    "MAE_MW": 2817,
+    "RMSE_MW": 3760,
+    "MAPE_pct": 5.33,
+    "reserve_P95_MW": 7702,
+    "over_GWh": 1462.5,
+    "under_GWh": 1242.1
+   },
+   "지난주 같은 시각": {
+    "MAE_MW": 4353,
+    "RMSE_MW": 6195,
+    "MAPE_pct": 8.37,
+    "reserve_P95_MW": 14241,
+    "over_GWh": 3026.9,
+    "under_GWh": 1151.9
+   }
+  },
+  "plan": {
+   "nuclear_MW": 22403,
+   "nuclear_basis": "원자력 설비 26,050 MW × 2025 이용률 중앙값 86.0% (가정)",
+   "flex_plan_mean_MW": 39371,
+   "flex_plan_max_MW": 68549,
+   "flex_need_mean_MW": 39359
+  },
+  "smp_2025_mean_won_per_kWh": 119.1,
+  "over_saving_value_100M_won": 2942.0,
+  "caution": "날씨 예보 없이 과거 값·요일·공휴일만 쓴 시제품. 태양광·풍력은 시장 거래분만 포함(자가소비 등 제외). 원자력 기저량은 이용률 중앙값을 쓴 가정이며 실제 급전 계획(발전기별 비용·제약)은 반영하지 않음. 돈 환산은 SMP 단순평균을 곱한 참고값.",
+  "example_day": "2025-09-08"
  }
 }
