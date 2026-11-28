@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import diff_badge %}
+{% block body %}
+<h2>문제 은행 <a class="btn small" href="/t/problem/0">+ 직접 추가</a></h2>
+<p class="muted">출제 중: {% for g, d, c in counts %}{{ g }} {{ d }} {{ c }}개{{ ', ' if not loop.last }}{% else %}없음{% endfor %}</p>
+<form class="row card" method="get">
+<select name="grade"><option value="">전체 학년</option>{% for g in GRADES %}<option {{ 'selected' if f.grade==g }}>{{ g }}</option>{% endfor %}</select>
+<select name="unit"><option value="0">전체 단원</option>{% for un in units %}<option value="{{ un.id }}" {{ 'selected' if f.unit==un.id }}>{{ un.grade }} {{ un.name }}</option>{% endfor %}</select>
+<select name="diff"><option value="">전체 난이도</option>{% for d in DIFFS %}<option {{ 'selected' if f.diff==d }}>{{ d }}</option>{% endfor %}</select>
+<select name="status"><option value="">전체 상태</option><option value="draft" {{ 'selected' if f.status=='draft' }}>초안(검토 전)</option><option value="published" {{ 'selected' if f.status=='published' }}>출제 중</option></select>
+<button class="btn small">보기</button></form>
+<form method="post" action="/t/problems/bulk">
+<div class="row"><label><input type="checkbox" onclick="document.querySelectorAll('.pick').forEach(c=>c.checked=this.checked)"> 전체 선택</label>
+<button class="btn small" name="action" value="publish">선택 → 출제</button>
+<button class="btn small ghost" name="action" value="draft">선택 → 초안</button>
+<button class="btn small danger" name="action" value="delete" onclick="return confirm('삭제할까요? (제출 기록이 있는 문제는 남겨요)')">선택 삭제</button></div>
+<div class="plist">
+{% for p in problems %}
+<div class="pitem {{ p.status }}"><input class="pick" type="checkbox" name="ids" value="{{ p.id }}">
+<a href="/t/problem/{{ p.id }}"><b>#{{ p.id }}</b> {{ diff_badge(p.difficulty) }} {{ p.unit.grade }} {{ p.unit.name }}
+{% if p.status=='draft' %}<span class="badge wait">초안</span>{% endif %}
+<div class="math clip">{{ p.body[:140] }}</div>
+{% if p.image_id %}<img class="mini" src="/blob/{{ p.image_id }}">{% endif %}
+<div class="muted">{{ p.source }}{% if not p.answer and not p.solution and not p.solution_image_id %} · <span class="neg">답지 없음</span>{% endif %}</div></a></div>
+{% else %}<p class="muted">문제가 없어요.</p>{% endfor %}
+</div></form>
+{% endblock %}

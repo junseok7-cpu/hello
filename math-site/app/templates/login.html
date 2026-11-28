@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="center card">
+  <h1>∑ 수학 적립</h1>
+  <p>디스코드 서버 멤버만 들어올 수 있어요.</p>
+  {% if msg %}<p class="alert">{{ msg }}</p>{% endif %}
+  <a class="btn big" href="/login">디스코드로 로그인</a>
+  {% if dev %}
+  <hr><p class="muted">개발용 로그인</p>
+  <a class="btn ghost" href="/dev-login?name=선생님&role=teacher">선생님</a>
+  <a class="btn ghost" href="/dev-login?name=민수&role=student&grade=중1">민수(중1)</a>
+  <a class="btn ghost" href="/dev-login?name=지아&role=student&grade=중2">지아(중2)</a>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+# Render.com 배포 설정 (사이트만. 채점은 선생님 PC)
+services:
+  - type: web
+    name: math-site
+    runtime: python
+    rootDir: math-site
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    envVars:
+      - key: DATABASE_URL        # Neon 등 무료 Postgres 주소
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GRADER_TOKEN        # 채점 PC config.env 에도 같은 값
+        generateValue: true
+      - key: BASE_URL            # 예: https://math-site.onrender.com
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
+      - key: TEACHER_DISCORD_IDS
+        sync: false

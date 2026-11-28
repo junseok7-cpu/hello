@@ -1,0 +1,33 @@
+{% macro diff_badge(d) %}<span class="badge d{{ {'하':0,'중':1,'상':2}[d] }}">{{ d }}</span>{% endmacro %}
+
+{% macro problem_view(p, show_meta=true, both=false) %}
+<div class="problem">
+  {% if show_meta %}<div class="meta">{{ diff_badge(p.difficulty) }} {{ p.unit.grade }} · {{ p.unit.name }}{% if p.source %} · <span class="muted">{{ p.source }}</span>{% endif %}</div>{% endif %}
+  {% if p.body and (both or not p.image_id) %}<div class="math body">{{ p.body }}</div>{% endif %}
+  {% if p.image_id %}<img class="pimg" src="/blob/{{ p.image_id }}" alt="문제 그림">{% endif %}
+</div>
+{% endmacro %}
+
+{% macro solution_view(p) %}
+<div class="solution">
+  <h4>답지</h4>
+  {% if p.answer %}<div class="math"><b>답:</b> {{ p.answer }}</div>{% endif %}
+  {% if p.solution %}<div class="math body">{{ p.solution }}</div>{% endif %}
+  {% if p.solution_image_id %}<img class="pimg" src="/blob/{{ p.solution_image_id }}" alt="풀이">{% endif %}
+</div>
+{% endmacro %}
+
+{% macro status_text(s) %}
+  {%- if s.status in ['queued','grading'] -%}<span class="badge wait">채점 대기</span>
+  {%- elif s.status == 'error' -%}<span class="badge bad">채점 오류</span>
+  {%- elif s.passed -%}<span class="badge good">{{ s.score }}점 통과</span>
+  {%- else -%}<span class="badge bad">{{ s.score }}점</span>{%- endif %}
+  {%- if s.reward_status == 'credited' %} <span class="won">+{{ s.reward_amount }}원</span>
+  {%- elif s.reward_status == 'pending' %} <span class="badge wait">승인 대기 {{ s.reward_amount }}원</span>
+  {%- elif s.reward_status == 'capped' %} <span class="muted">오늘 한도 도달</span>
+  {%- elif s.reward_status == 'rejected' %} <span class="badge bad">반려</span>{% endif %}
+  {%- if s.is_retry %} <span class="muted">재도전</span>{% endif %}
+  {%- if s.appeal_status == 'open' %} <span class="badge wait">이의신청 중</span>
+  {%- elif s.appeal_status == 'accepted' %} <span class="badge good">이의 인정</span>
+  {%- elif s.appeal_status == 'rejected' %} <span class="muted">이의 기각</span>{% endif %}
+{% endmacro %}

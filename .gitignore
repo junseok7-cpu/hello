@@ -9,3 +9,8 @@ work/
 __pycache__/
 .ruff_cache/
 node_modules/
+# math-site
+math-site/data.sqlite3
+math-site/grader/config.env
+math-site/inbox/*
+!math-site/inbox/.gitkeep

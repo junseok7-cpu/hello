@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block body %}
+<h2>학생 관리</h2>
+<p class="muted">디스코드로 처음 들어온 학생은 학년을 정해 줘야 문제를 받을 수 있어요.</p>
+<section class="card"><table>
+<tr><th>이름</th><th>학년 / 상태</th><th class="r">적립금</th><th></th></tr>
+{% for x in users %}<tr class="{{ '' if x.active else 'muted' }}"><td><a href="/t/student/{{ x.id }}">{{ x.name }}</a></td>
+<td><form method="post" action="/t/students/{{ x.id }}" class="row">
+<select name="grade"><option value="">학년 미정</option>{% for g in GRADES %}<option {{ 'selected' if x.grade==g }}>{{ g }}</option>{% endfor %}</select>
+<select name="active"><option value="1" {{ 'selected' if x.active }}>활동</option><option value="0" {{ 'selected' if not x.active }}>중지</option></select>
+<button class="btn small">저장</button></form></td>
+<td class="r">{{ "{:,}".format(bal[x.id]) }}원</td><td><a href="/t/student/{{ x.id }}">상세</a></td></tr>{% endfor %}
+</table></section>
+{% endblock %}

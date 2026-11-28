@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_text %}
+{% block body %}
+<h2>{{ st.name }} <span class="muted">{{ st.grade or '학년 미정' }}</span></h2>
+<section class="stats"><div class="stat"><span>적립금</span><b>{{ "{:,}".format(balance) }}원</b></div></section>
+<section class="card"><h3>지급 / 조정</h3>
+<form method="post" action="/t/students/{{ st.id }}/ledger" class="row">
+<select name="kind"><option value="payout">지급 (차감)</option><option value="adjust">조정 (+/-)</option></select>
+<input name="amount" type="number" required placeholder="금액" style="width:8em"><input name="memo" placeholder="메모">
+<button class="btn">기록</button></form></section>
+{% for r in matrix %}<section class="card"><h3>단원별 상태</h3><div class="grid">{% for c in r.cells %}
+<div class="cell {{ c.state }}"><small>{{ c.unit.grade }}</small> {{ c.unit.name }}<br>
+<small>하 {{ c.s['하'][1] }}/{{ c.s['하'][0] }} · 중 {{ c.s['중'][1] }}/{{ c.s['중'][0] }} · 상 {{ c.s['상'][1] }}/{{ c.s['상'][0] }}</small></div>
+{% endfor %}</div></section>{% endfor %}
+<section class="card"><h3>최근 제출</h3><ul class="list">
+{% for s in subs %}<li><a href="/t/sub/{{ s.id }}">#{{ s.id }}</a> {{ s.problem.unit.name }} ({{ s.problem.difficulty }}) {{ status_text(s) }} <span class="muted">{{ s.created_at|kst }}</span></li>{% endfor %}
+</ul></section>
+<section class="card"><h3>적립 내역</h3><table>
+{% for l in ledger %}<tr><td>{{ l.kst_date }}</td><td>{{ l.memo }}</td><td class="r">{{ '%+d'|format(l.amount) }}</td></tr>{% endfor %}
+</table></section>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_macros.html" import problem_view, status_text, diff_badge %}
+{% block body %}
+<section class="stats">
+  <div class="stat"><span>내 적립금</span><b>{{ "{:,}".format(balance) }}원</b></div>
+  <div class="stat"><span>오늘 적립</span><b>{{ used }} / {{ cap }}원</b>
+    <div class="bar"><i style="width:{{ [100, used*100//cap]|min }}%"></i></div></div>
+</section>
+{% if request.query_params.get('sent') %}<p class="alert ok">제출했어요! 채점이 끝나면 여기에 결과가 나와요.</p>{% endif %}
+{% if used >= cap %}<p class="alert">오늘 적립 한도({{ cap }}원)를 다 채웠어요. 더 풀어도 되지만 적립은 내일부터 돼요.</p>{% endif %}
+
+<section class="card">
+  <h2>오늘의 문제</h2>
+  {% if problem %}
+    {{ problem_view(problem) }}
+    <p class="reward">통과하면 <b>{{ problem.reward }}원</b>{% if problem.difficulty == '상' %} (선생님 승인 후 적립){% endif %}</p>
+    <a class="btn big" href="/s/p/{{ problem.id }}">풀이 제출하러 가기</a>
+  {% else %}
+    <p class="muted">지금 풀 수 있는 새 문제가 없어요. 선생님이 문제를 더 올려 줄 거예요.</p>
+  {% endif %}
+</section>
+
+{% if retry %}
+<section class="card"><h3>다시 도전할 문제</h3>
+<ul class="list">{% for sp in retry %}
+  <li><a href="/s/p/{{ sp.problem_id }}">{{ diff_badge(sp.problem.difficulty) }} {{ sp.problem.unit.name }} #{{ sp.problem_id }}</a>
+  {% if sp.state == 'locked' %}<span class="badge good">한 달 재도전 · 적립 절반</span>{% else %}<span class="muted">{{ sp.fail_count }}/3회 틀림</span>{% endif %}</li>
+{% endfor %}</ul></section>
+{% endif %}
+
+{% if waiting or pending %}
+<section class="card"><h3>기다리는 중</h3><ul class="list">
+{% for sp in waiting %}<li><a href="/s/p/{{ sp.problem_id }}">#{{ sp.problem_id }} {{ sp.problem.unit.name }}</a> <span class="badge wait">채점 대기</span></li>{% endfor %}
+{% for sp in pending %}<li><a href="/s/p/{{ sp.problem_id }}">#{{ sp.problem_id }} {{ sp.problem.unit.name }}</a> <span class="badge wait">선생님 승인 대기</span></li>{% endfor %}
+</ul></section>
+{% endif %}
+
+{% if locked %}
+<section class="card"><h3>한 달 뒤 다시 풀 문제</h3><ul class="list">
+{% for sp in locked %}<li><a href="/s/p/{{ sp.problem_id }}">#{{ sp.problem_id }} {{ sp.problem.unit.name }}</a>
+ <span class="muted">D-{{ (sp.locked_until - now).days + 1 }} · 답지 보기 가능</span></li>{% endfor %}
+</ul></section>
+{% endif %}
+
+{% if recent %}
+<section class="card"><h3>최근 제출</h3><ul class="list">
+{% for s in recent %}<li><a href="/s/p/{{ s.problem_id }}">#{{ s.problem_id }}</a> {{ status_text(s) }} <span class="muted">{{ s.created_at|kst }}</span></li>{% endfor %}
+</ul></section>
+{% endif %}
+{% endblock %}

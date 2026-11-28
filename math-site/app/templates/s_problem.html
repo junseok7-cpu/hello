@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_macros.html" import problem_view, solution_view, status_text %}
+{% block body %}
+<p><a href="/s">← 돌아가기</a></p>
+<section class="card">
+  <h2>문제 #{{ p.id }}</h2>
+  {{ problem_view(p) }}
+  <p class="reward">통과(90점 이상)하면 <b>{{ p.reward // 2 if sp and sp.is_retry or (sp and sp.state=='locked') else p.reward }}원</b>
+  {% if p.difficulty == '상' %} · 선생님 승인 후 적립{% endif %}</p>
+</section>
+
+{% if can_submit %}
+<section class="card">
+  <h3>풀이 제출</h3>
+  <p class="muted">노트에 <b>풀이 과정과 답</b>을 모두 쓰고 사진을 찍어 올려요. 과정이 없으면 점수가 낮아요. (최대 3장)</p>
+  {% if sp and sp.state == 'open' %}<p class="alert">지금까지 {{ sp.fail_count }}번 통과하지 못했어요. {{ max_fails }}번째에도 못 넘으면 답지가 열리고 한 달 뒤에 다시 풀어요.</p>{% endif %}
+  <form method="post" action="/s/p/{{ p.id }}/submit" enctype="multipart/form-data" class="submit-form">
+    <label class="file">📷 사진 찍기 / 고르기
+      <input type="file" name="photos" accept="image/*" capture="environment" multiple required>
+    </label>
+    <div class="previews"></div>
+    <label>최종 답 (선택) <input name="typed_answer" placeholder="예: x = 3"></label>
+    <button class="btn big" type="submit">제출하기</button>
+  </form>
+</section>
+{% elif sp and sp.state == 'locked' %}
+<p class="alert">{{ sp.locked_until|kst }} 이후에 다시 풀 수 있어요. 그때 통과하면 적립금은 절반이에요.</p>
+{% endif %}
+
+{% if show_solution %}<section class="card">{{ solution_view(p) }}</section>{% endif %}
+
+{% if subs %}
+<section class="card"><h3>내 제출</h3>
+{% for s in subs %}
+<div class="sub">
+  <div>{{ status_text(s) }} <span class="muted">{{ s.created_at|kst }}</span></div>
+  <div class="thumbs">{% for i in s.images %}<a href="/blob/{{ i }}" target="_blank"><img src="/blob/{{ i }}"></a>{% endfor %}</div>
+  {% if s.feedback %}<div class="feedback math">{{ s.feedback }}</div>{% endif %}
+  {% if s.teacher_note %}<div class="feedback"><b>선생님:</b> {{ s.teacher_note }}</div>{% endif %}
+  {% if s.status == 'graded' and not s.passed and s.appeal_status == 'none' %}
+  <details><summary>이의신청</summary>
+    <form method="post" action="/s/appeal/{{ s.id }}">
+      <textarea name="text" required placeholder="왜 채점이 틀렸다고 생각하는지 적어 주세요"></textarea>
+      <button class="btn">이의신청 보내기</button>
+    </form></details>
+  {% endif %}
+</div>
+{% endfor %}
+</section>
+{% endif %}
+{% endblock %}

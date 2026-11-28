@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_macros.html" import problem_view, solution_view %}
+{% block body %}
+<p><a href="/t/problems">← 문제 은행</a></p>
+<h2>{{ '문제 #' ~ p.id if p else '새 문제' }}</h2>
+{% if request.query_params.get('saved') %}<p class="alert ok">저장했어요.</p>{% endif %}
+<div class="cols">
+<form class="card" method="post" action="/t/problem/{{ p.id if p else 0 }}" enctype="multipart/form-data">
+  <label>단원 <select name="unit_id">{% for un in units %}<option value="{{ un.id }}" {{ 'selected' if p and p.unit_id==un.id }}>{{ un.grade }} · {{ un.name }}</option>{% endfor %}</select></label>
+  <label>난이도 <select name="difficulty">{% for d in DIFFS %}<option {{ 'selected' if p and p.difficulty==d or (not p and d=='중') }}>{{ d }}</option>{% endfor %}</select></label>
+  <label>출처 <input name="source" value="{{ p.source if p }}" placeholder="예: 쎈 중2-1 p.34 #120"></label>
+  <label>문제 (수식은 $x^2$ 처럼) <textarea name="body" rows="6" class="live">{{ p.body if p }}</textarea></label>
+  <label>문제 그림 <input type="file" name="image" accept="image/*">{% if p and p.image_id %}<label class="inline"><input type="checkbox" name="remove_image" value="1"> 그림 지우기</label>{% endif %}</label>
+  <label>답 <input name="answer" value="{{ p.answer if p }}"></label>
+  <label>풀이 (답지) <textarea name="solution" rows="6" class="live">{{ p.solution if p }}</textarea></label>
+  <label>풀이 그림 <input type="file" name="sol_image" accept="image/*">{% if p and p.solution_image_id %}<label class="inline"><input type="checkbox" name="remove_sol_image" value="1"> 풀이 그림 지우기</label>{% endif %}</label>
+  <label>상태 <select name="status"><option value="draft" {{ 'selected' if not p or p.status=='draft' }}>초안 (학생에게 안 보임)</option><option value="published" {{ 'selected' if p and p.status=='published' }}>출제</option></select></label>
+  <button class="btn big">저장</button>
+</form>
+{% if p %}<div class="card"><h3>미리보기</h3>{{ problem_view(p, both=true) }}{{ solution_view(p) }}</div>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_macros.html" import problem_view, solution_view, status_text %}
+{% block body %}
+<h2>{{ title }} <span class="muted">{{ subs|length if mode != 'view' else '' }}</span></h2>
+{% for s in subs %}
+<section class="card review">
+  <div class="rhead"><b><a href="/t/student/{{ s.user_id }}">{{ s.user.name }}</a></b> · 제출 #{{ s.id }} · {{ s.created_at|kst }} · {{ status_text(s) }} {% if s.engine %}<span class="muted">({{ s.engine }})</span>{% endif %}</div>
+  <div class="cols">
+    <div>{{ problem_view(s.problem, both=true) }}<details {{ 'open' if mode!='view' }}><summary>답지</summary>{{ solution_view(s.problem) }}</details>
+      <p><a href="/t/problem/{{ s.problem_id }}">문제 수정</a></p></div>
+    <div><div class="thumbs big">{% for i in s.images %}<a href="/blob/{{ i }}" target="_blank"><img src="/blob/{{ i }}"></a>{% endfor %}</div>
+      {% if s.typed_answer %}<p><b>입력한 답:</b> {{ s.typed_answer }}</p>{% endif %}
+      {% if s.answer_read %}<p><b>AI가 읽은 답:</b> {{ s.answer_read }}</p>{% endif %}
+      {% if s.feedback %}<div class="feedback math"><b>학생에게 보인 피드백:</b> {{ s.feedback }}</div>{% endif %}
+      {% if s.ai_errors %}<div class="feedback math"><b>AI가 찾은 틀린 부분 (선생님만):</b>
+{{ s.ai_errors }}</div>{% endif %}
+      {% if s.appeal_text %}<div class="feedback"><b>학생 이의:</b> {{ s.appeal_text }}</div>{% endif %}
+    </div>
+  </div>
+  {% if mode == 'approve' %}
+  <form method="post" action="/t/approve/{{ s.id }}" class="row">
+    <input name="note" placeholder="반려 사유 (학생에게 보여요)">
+    <button class="btn" name="action" value="approve">승인 (+{{ s.reward_amount }}원)</button>
+    <button class="btn danger" name="action" value="reject">반려 (오답 처리)</button>
+  </form>
+  {% elif mode == 'appeal' %}
+  <form method="post" action="/t/appeal/{{ s.id }}" class="row">
+    <input name="new_score" type="number" min="0" max="100" placeholder="새 점수" style="width:6em">
+    <input name="note" placeholder="학생에게 남길 말">
+    <button class="btn" name="action" value="accept">인정</button>
+    <button class="btn danger" name="action" value="reject">기각</button>
+  </form>
+  {% elif s.status == 'error' %}
+  <form method="post" action="/t/sub/{{ s.id }}/regrade"><button class="btn">다시 채점</button></form>
+  {% endif %}
+</section>
+{% else %}<p class="muted">없어요 🎉</p>{% endfor %}
+{% endblock %}

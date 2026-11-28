@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import diff_badge %}
+{% block body %}
+<section class="stats">
+  <div class="stat {{ 'good' if online else 'bad' }}"><span>채점 PC</span><b>{{ '켜짐' if online else '꺼짐' }}</b><small>{{ '구독: ChatGPT(Codex)' if engine=='codex' else '구독: Claude' }}</small></div>
+  <a class="stat" href="/t/problems?status=published"><span>채점 대기</span><b>{{ counts.queued }}</b></a>
+  <a class="stat {{ 'warn' if counts.pending }}" href="/t/approvals"><span>상 승인 대기</span><b>{{ counts.pending }}</b></a>
+  <a class="stat {{ 'warn' if counts.appeals }}" href="/t/appeals"><span>이의신청</span><b>{{ counts.appeals }}</b></a>
+  <a class="stat" href="/t/problems?status=published"><span>출제 중 문제</span><b>{{ counts.published }}</b></a>
+  <a class="stat {{ 'warn' if counts.drafts }}" href="/t/problems?status=draft"><span>검토할 초안</span><b>{{ counts.drafts }}</b></a>
+</section>
+{% if counts.no_grade %}<p class="alert"><a href="/t/students">학년이 정해지지 않은 학생 {{ counts.no_grade }}명</a>이 기다리고 있어요.</p>{% endif %}
+
+<section class="card"><h2>학생 한눈에 보기</h2>
+<table><tr><th>학생</th><th>학년</th><th class="r">적립금</th><th class="r">오늘</th><th>취약단원</th></tr>
+{% for r in summary %}<tr><td><a href="/t/student/{{ r.st.id }}">{{ r.st.name }}</a></td><td>{{ r.st.grade or '-' }}</td>
+<td class="r">{{ "{:,}".format(r.balance) }}</td><td class="r">{{ r.today }}</td>
+<td>{% for w in r.weak %}<span class="badge bad">{{ w.grade }} {{ w.name }}</span> {% else %}<span class="muted">없음</span>{% endfor %}</td></tr>{% endfor %}
+</table></section>
+
+<section class="card"><h2>단원별 상태</h2>
+<p class="muted"><span class="cell weak">취약</span> <span class="cell ok">괜찮음</span> <span class="cell collecting">표본 모으는 중</span> · 칸 안 숫자 = 중 오답/채점, 상 오답/채점</p>
+{% for r in matrix %}
+<h4><a href="/t/student/{{ r.student.id }}">{{ r.student.name }}</a> <span class="muted">{{ r.student.grade }}</span></h4>
+<div class="grid">{% for c in r.cells %}
+<div class="cell {{ c.state }}" title="하 {{ c.s['하'][1] }}/{{ c.s['하'][0] }} · 중 {{ c.s['중'][1] }}/{{ c.s['중'][0] }} · 상 {{ c.s['상'][1] }}/{{ c.s['상'][0] }}">
+<small>{{ c.unit.grade }}</small> {{ c.unit.name }}<br><small>중 {{ c.s['중'][1] }}/{{ c.s['중'][0] }} · 상 {{ c.s['상'][1] }}/{{ c.s['상'][0] }}</small></div>
+{% endfor %}</div>
+{% endfor %}
+</section>
+{% endblock %}

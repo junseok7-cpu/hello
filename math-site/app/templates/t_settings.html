@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block body %}
+<h2>설정</h2>
+{% if request.query_params.get('saved') %}<p class="alert ok">저장했어요.</p>{% endif %}
+<form class="card stack" method="post">
+<label>채점 AI (구독) <select name="engine">
+<option value="codex" {{ 'selected' if vals.engine=='codex' }}>ChatGPT 구독 (Codex CLI)</option>
+<option value="claude" {{ 'selected' if vals.engine=='claude' }}>Claude 구독 (Claude Code)</option></select>
+<small class="muted">채점 PC: {{ '켜짐' if online else '꺼짐' }} · 한쪽 사용량이 다 차면 바꾸세요.</small></label>
+<label>통과 점수 <input name="pass_score" type="number" value="{{ vals.pass_score }}"></label>
+<label>하루 최대 적립금(원) <input name="daily_cap" type="number" value="{{ vals.daily_cap }}"></label>
+<label>몇 번 틀리면 답지 공개 <input name="max_fails" type="number" value="{{ vals.max_fails }}"></label>
+<label>답지 공개 후 재도전까지(일) <input name="lock_days" type="number" value="{{ vals.lock_days }}"></label>
+<fieldset><legend>취약단원 기준</legend>
+<label>'중' 표본 수 <input name="mid_sample" type="number" value="{{ vals.mid_sample }}"></label>
+<label>'중' 오답률 이상 <input name="mid_wrong" value="{{ vals.mid_wrong }}"></label>
+<label>'상' 표본 수 <input name="hi_sample" type="number" value="{{ vals.hi_sample }}"></label>
+<label>'상' 오답률 이상 <input name="hi_wrong" value="{{ vals.hi_wrong }}"></label>
+<label>취약단원에서 낼 비율 <input name="weak_ratio" value="{{ vals.weak_ratio }}"></label></fieldset>
+<button class="btn big">저장</button></form>
+{% endblock %}
