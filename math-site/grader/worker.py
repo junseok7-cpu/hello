@@ -86,7 +86,15 @@ def grade(site: Site, job: dict):
             imgs.append(site.blob(p["solution_image_id"], os.path.join(wd, "solution.jpg")))
             sol_note = "(답지 원본 이미지: solution.jpg)"
         students = ", ".join(f"student_{i + 1}.jpg" for i in range(len(job["images"])))
-        prompt = prompts.GRADE.format(
+        template = prompts.GRADE
+        extra = {}
+        if p.get("subject") == "science":
+            qt = p.get("qtype") or "essay"
+            template = prompts.GRADE_SCIENCE
+            extra = dict(qtype_name={"mc_right": "객관식(옳은 것 고르기)", "mc_wrong": "객관식(옳지 않은 것 고르기)",
+                                     "calc": "계산형", "essay": "서술형"}.get(qt, "서술형"),
+                         requirement=prompts.SCIENCE_REQUIREMENT.get(qt, prompts.SCIENCE_REQUIREMENT["essay"]))
+        prompt = template.format(**extra,
             grade=p["grade"], unit=p["unit"], difficulty=p["difficulty"],
             body=p["body"] or "(문제 이미지 참고)", problem_image_note=pimg_note,
             answer=p["answer"] or "(답지 이미지 참고)", solution=p["solution"] or "(답지 이미지 참고)",
@@ -184,6 +192,7 @@ def do_import(site: Site, job: dict, engine=None, log=print):
         for n, img in enumerate(render_pages(ppdf, wd, "page"), 1):
             try:
                 res = engines.ask(engine, prompts.PAGE_PROBLEMS.format(
+                    subject_name={"science": "과학"}.get(job.get("subject"), "수학"),
                     page_image=os.path.basename(img), grade=job["grade"], title=job["title"],
                     page=n, units=units), [img], wd)
             except Exception as e:
@@ -198,7 +207,8 @@ def do_import(site: Site, job: dict, engine=None, log=print):
                 matched += bool(a)
                 # 그림이 있는 문제만 원본을 잘라 붙인다 (없으면 글자로 보여 주는 게 깔끔)
                 image = crop(img, q["bbox"]) if q.get("bbox") and q.get("has_figure") else None
-                site.add_problem(dict(unit_id=uid, difficulty=diff, body=q.get("body", ""),
+                qtype = q.get("qtype") if q.get("qtype") in ("essay", "calc", "mc_right", "mc_wrong") else "essay"
+                site.add_problem(dict(unit_id=uid, difficulty=diff, body=q.get("body", ""), qtype=qtype,
                                       answer=a.get("answer", ""), solution=a.get("solution", ""),
                                       source=f"{job['title']} p.{n} #{q.get('number', '')}",
                                       status="draft", job_id=job.get("job_id", 0)), image)

@@ -6,8 +6,10 @@
 {% if request.query_params.get('saved') %}<p class="alert ok">저장했어요.</p>{% endif %}
 <div class="cols">
 <form class="card" method="post" action="/t/problem/{{ p.id if p else 0 }}" enctype="multipart/form-data">
-  <label>단원 <select name="unit_id">{% for un in units %}<option value="{{ un.id }}" {{ 'selected' if p and p.unit_id==un.id }}>{{ un.grade }} · {{ un.name }}</option>{% endfor %}</select></label>
+  <label>단원 <select name="unit_id">{% for un in units %}<option value="{{ un.id }}" {{ 'selected' if p and p.unit_id==un.id }}>{{ SUBJECTS[un.subject] }} · {{ un.grade }} · {{ un.name }}</option>{% endfor %}</select></label>
   <label>난이도 <select name="difficulty">{% for d in DIFFS %}<option {{ 'selected' if p and p.difficulty==d or (not p and d=='중') }}>{{ d }}</option>{% endfor %}</select></label>
+  <label>문제 유형 <select name="qtype">{% for k, v in QTYPES.items() %}<option value="{{ k }}" {{ 'selected' if p and p.qtype==k }}>{{ v }}</option>{% endfor %}</select>
+    <small class="muted">객관식은 보기(①~⑤)를 문제에 그대로 두세요. 학생은 정답 + 선지별 이유를 써요.</small></label>
   <label>출처 <input name="source" value="{{ p.source if p }}" placeholder="예: 쎈 중2-1 p.34 #120"></label>
   <label>문제 (수식은 $x^2$ 처럼) <textarea name="body" rows="6" class="live">{{ p.body if p }}</textarea></label>
   <label>문제 그림 <input type="file" name="image" accept="image/*">{% if p and p.image_id %}<label class="inline"><input type="checkbox" name="remove_image" value="1"> 그림 지우기</label>{% endif %}</label>

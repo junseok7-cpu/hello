@@ -1,25 +1,26 @@
 {% extends "base.html" %}
-{% from "_macros.html" import problem_view, solution_view, status_text %}
+{% from "_macros.html" import problem_view, solution_view, status_text, howto %}
 {% block body %}
-<p><a href="/s">← 돌아가기</a></p>
+<p><a href="/s?subject={{ p.subject }}">← 돌아가기</a></p>
 <section class="card">
   <h2>문제 #{{ p.id }}</h2>
   {{ problem_view(p) }}
-  <p class="reward">통과(90점 이상)하면 <b>{{ p.reward // 2 if sp and sp.is_retry or (sp and sp.state=='locked') else p.reward }}원</b>
+  {{ howto(p) }}
+  <p class="reward">통과(90점 이상)하면 <b>{{ reward }}원</b>
   {% if p.difficulty == '상' %} · 선생님 승인 후 적립{% endif %}</p>
 </section>
 
 {% if can_submit %}
 <section class="card">
   <h3>풀이 제출</h3>
-  <p class="muted">노트에 <b>풀이 과정과 답</b>을 모두 쓰고 사진을 찍어 올려요. 과정이 없으면 점수가 낮아요. (최대 3장)</p>
+  <p class="muted">위 "노트에 쓸 것"을 모두 쓰고 사진을 찍어 올려요. 이유나 과정이 없으면 점수가 낮아요. (최대 3장)</p>
   {% if sp and sp.state == 'open' %}<p class="alert">지금까지 {{ sp.fail_count }}번 통과하지 못했어요. {{ max_fails }}번째에도 못 넘으면 답지가 열리고 한 달 뒤에 다시 풀어요.</p>{% endif %}
   <form method="post" action="/s/p/{{ p.id }}/submit" enctype="multipart/form-data" class="submit-form">
     <label class="file">📷 사진 찍기 / 고르기
       <input type="file" name="photos" accept="image/*" capture="environment" multiple required>
     </label>
     <div class="previews"></div>
-    <label>최종 답 (선택) <input name="typed_answer" placeholder="예: x = 3"></label>
+    <label>최종 답 (선택) <input name="typed_answer" placeholder="{{ '예: ③' if p.subject == 'science' else '예: x = 3' }}"></label>
     <button class="btn big" type="submit">제출하기</button>
   </form>
 </section>

@@ -22,12 +22,12 @@ def db():
     s.close()
 
 
-def unit(db, grade, i=0):
-    return db.query(D.Unit).filter_by(grade=grade).order_by(D.Unit.order).all()[i]
+def unit(db, grade, i=0, subject="math"):
+    return db.query(D.Unit).filter_by(grade=grade, subject=subject).order_by(D.Unit.order).all()[i]
 
 
-def prob(db, grade, diff, i=0):
-    p = D.Problem(unit_id=unit(db, grade, i).id, difficulty=diff, body="x", status="published")
+def prob(db, grade, diff, i=0, subject="math"):
+    p = D.Problem(unit_id=unit(db, grade, i, subject).id, difficulty=diff, body="x", status="published")
     db.add(p)
     db.flush()
     return p
@@ -131,7 +131,7 @@ def test_pick_prefers_weak(db):
     for _ in range(5):
         prob(db, "중2", "하", 3)
     rng = random.Random(1)
-    hits = sum(L.pick_problem(db, u, rng).unit_id == weak_new[0].unit_id for _ in range(200))
+    hits = sum(L.pick_problem(db, u, rng=rng).unit_id == weak_new[0].unit_id for _ in range(200))
     assert hits > 120  # 약 70% + 무작위로 뽑힌 몫
 
 
@@ -149,7 +149,7 @@ def test_skip_once_per_day(db):
     u = student(db)
     ps = [prob(db, "중2", "하") for _ in range(3)]
     first = L.current_problem(db, u)
-    assert L.skip_problem(db, u, random.Random(0))
+    assert L.skip_problem(db, u, rng=random.Random(0))
     assert u.current_problem_id != first.id
     assert not L.can_skip(u) and not L.skip_problem(db, u)
 
@@ -177,5 +177,60 @@ def test_report_collect(db):
     assert R.ensure_reports(db, date(2026, 11, 28)) == 1
     assert R.ensure_reports(db, date(2026, 11, 29)) == 0  # 같은 기간은 한 번만
     d = json.loads(db.query(D.Report).one().data)
-    assert d["submissions"] == 2 and d["passed"] == 1 and d["pass_rate"] == 50 and d["earned"] == 10
-    assert d["by_diff"]["상"] == {"n": 1, "pass": 0}
+    m = d["subjects"]["math"]
+    assert m["submissions"] == 2 and m["passed"] == 1 and m["pass_rate"] == 50 and m["earned"] == 10
+    assert m["by_diff"]["상"] == {"n": 1, "pass": 0}
+    assert d["subjects"]["science"]["submissions"] == 0 and d["earned"] == 10
+
+
+# ---------- 과학 ----------
+
+def test_science_reward_and_separate_cap(db):
+    u = student(db)
+    for _ in range(10):
+        s = submit(db, u, prob(db, "중2", "하", subject="science"), 95)
+    assert s.reward_amount == 20 and L.balance(db, u.id) == 200
+    s = submit(db, u, prob(db, "중2", "중", subject="science"), 95)
+    assert s.reward_status == "capped"  # 과학 200원 한도
+    s = submit(db, u, prob(db, "중2", "중"), 95)
+    assert s.reward_amount == 10  # 수학 한도는 따로
+    assert L.used_today(db, u.id, D.kst_today(), "math") == 10
+
+
+def test_science_no_lower_grade(db):
+    u = student(db, "중2")
+    own = prob(db, "중2", "상", subject="science")
+    prob(db, "중1", "상", subject="science")
+    assert [p.id for p in L.fresh_pool(db, u, "science")] == [own.id]
+    assert all(p.subject == "math" for p in L.fresh_pool(db, u, "math"))
+
+
+def test_science_mixes_difficulty(db):
+    u = student(db, "중2")
+    for d in "하중상" * 3:
+        prob(db, "중2", d, subject="science")
+    got = []
+    for _ in range(6):
+        p = L.current_problem(db, u, "science")
+        got.append(p.difficulty)
+        submit(db, u, p, 95)
+    assert got == list("하중상하중상")
+
+
+def test_science_hard_retry_half(db):
+    u = student(db)
+    p = prob(db, "중2", "중", subject="science")
+    for _ in range(3):
+        submit(db, u, p, 30)
+    L.get_sp(db, u.id, p.id).locked_until = D.now() - timedelta(seconds=1)
+    s = submit(db, u, p, 95)
+    assert s.reward_amount == 10
+
+
+def test_current_problem_per_subject(db):
+    u = student(db)
+    m = prob(db, "중2", "중")
+    sc = prob(db, "중2", "하", subject="science")
+    assert L.current_problem(db, u, "math").id == m.id
+    assert L.current_problem(db, u, "science").id == sc.id
+    assert L.can_submit(db, u, m.id) and L.can_submit(db, u, sc.id)

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}수학 적립{% endblock %}</title>
+<title>{% block title %}공부 적립{% endblock %}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
@@ -13,14 +13,14 @@
 <body>
 {% if user %}
 <header class="top">
-  <a class="brand" href="/">∑ 수학 적립</a>
+  <a class="brand" href="/">∑ 공부 적립</a>
   <nav>
   {% if user.role == 'teacher' %}
     <a href="/t">대시보드</a><a href="/t/approvals">승인</a><a href="/t/appeals">이의신청</a>
     <a href="/t/problems">문제</a><a href="/t/import">PDF 등록</a><a href="/t/students">학생</a><a href="/t/reports">보고서</a>
     <a href="/t/units">단원</a><a href="/t/settings">설정</a>
   {% else %}
-    <a href="/s">문제 풀기</a><a href="/s/history">적립 내역</a>
+    <a href="/s?subject=math">📐 수학</a><a href="/s?subject=science">🔬 과학</a><a href="/s/history">적립 내역</a>
   {% endif %}
   </nav>
   <span class="who">{{ user.name }}{% if user.grade %} · {{ user.grade }}{% endif %} <a href="/logout">나가기</a></span>

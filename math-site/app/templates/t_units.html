@@ -1,17 +1,19 @@
 {% extends "base.html" %}
 {% block body %}
 <h2>단원 관리</h2>
-<p class="muted">교재 목차에 맞게 고쳐 쓰세요. 문제가 있는 단원은 지울 수 없어요.</p>
+<p class="muted">교재 목차에 맞게 고쳐 쓰세요. 문제가 있는 단원은 지울 수 없어요. 과학 중1·중2는 교재마다 단원 순서가 달라서 4개 영역으로만 넣어 두었어요.</p>
 <section class="card"><form method="post" action="/t/units" class="row"><input type="hidden" name="action" value="add">
+<select name="subject">{% for k, v in SUBJECTS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
 <select name="grade">{% for g in GRADES %}<option>{{ g }}</option>{% endfor %}</select>
 <input name="name" placeholder="단원 이름" required><input name="order" type="number" value="99" style="width:5em">
 <button class="btn">추가</button></form></section>
-{% for g in GRADES %}<section class="card"><h3>{{ g }}</h3>
-{% for un in units if un.grade == g %}
+{% for sk, sv in SUBJECTS.items() %}{% for g in GRADES %}{% set us = units|selectattr('subject','equalto',sk)|selectattr('grade','equalto',g)|list %}
+{% if us %}<section class="card"><h3>{{ sv }} {{ g }}</h3>
+{% for un in us %}
 <form method="post" action="/t/units" class="row"><input type="hidden" name="uid" value="{{ un.id }}">
 <input name="order" type="number" value="{{ un.order }}" style="width:4em"><input name="name" value="{{ un.name }}" style="flex:1">
 <span class="muted">{{ n.get(un.id, 0) }}문제</span>
 <button class="btn small" name="action" value="save">저장</button>
 {% if not n.get(un.id) %}<button class="btn small danger" name="action" value="delete">삭제</button>{% endif %}</form>
-{% endfor %}</section>{% endfor %}
+{% endfor %}</section>{% endif %}{% endfor %}{% endfor %}
 {% endblock %}

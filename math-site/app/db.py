@@ -29,6 +29,14 @@ Base = declarative_base()
 
 GRADES = ["중1", "중2", "중3", "고1", "고2", "고3"]
 DIFFS = ["하", "중", "상"]
+SUBJECTS = {"math": "수학", "science": "과학"}
+# 문제 유형: 학생에게 무엇을 써야 하는지 알려 주고, 채점 기준을 고른다
+QTYPES = {
+    "essay": "서술형",
+    "calc": "계산형",
+    "mc_right": "객관식 (옳은 것 고르기)",
+    "mc_wrong": "객관식 (옳지 않은 것 고르기)",
+}
 
 
 class User(Base):
@@ -40,17 +48,20 @@ class User(Base):
     grade = Column(String(4))  # 중1..고3, 선생님이 지정
     active = Column(Boolean, default=True)
     current_problem_id = Column(Integer, ForeignKey("problems.id"))
-    skip_date = Column(String(10), default="")  # 마지막으로 건너뛰기 쓴 날 (KST)
+    skip_date = Column(String(10), default="")  # 마지막으로 건너뛰기 쓴 날 (KST, 수학)
+    current_sci_id = Column(Integer, ForeignKey("problems.id"))  # 과학 오늘의 문제
+    skip_date_sci = Column(String(10), default="")
     created_at = Column(DateTime, default=now)
 
 
 class Unit(Base):
     __tablename__ = "units"
     id = Column(Integer, primary_key=True)
+    subject = Column(String(10), default="math", nullable=False)  # math | science
     grade = Column(String(4), nullable=False)
     order = Column(Integer, default=0)
     name = Column(String(120), nullable=False)
-    __table_args__ = (UniqueConstraint("grade", "name"),)
+    __table_args__ = (UniqueConstraint("subject", "grade", "name"),)
 
 
 class Blob(Base):
@@ -66,6 +77,7 @@ class Problem(Base):
     id = Column(Integer, primary_key=True)
     unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
     difficulty = Column(String(2), nullable=False)  # 하 중 상
+    qtype = Column(String(10), default="essay")  # QTYPES 참고
     source = Column(String(200), default="")  # 예: 쎈 중1-1 p.12 #34
     body = Column(Text, default="")  # 문제 (마크다운 + LaTeX $...$)
     image_id = Column(Integer, ForeignKey("blobs.id"))  # 그림/원본 잘라낸 이미지
@@ -82,8 +94,8 @@ class Problem(Base):
         return self.unit.grade if self.unit else None
 
     @property
-    def reward(self):
-        return 100 if self.difficulty == "상" else 10
+    def subject(self):
+        return self.unit.subject if self.unit else "math"
 
 
 class StudentProblem(Base):
@@ -155,6 +167,7 @@ class ImportJob(Base):
     __tablename__ = "import_jobs"
     id = Column(Integer, primary_key=True)
     title = Column(String(200), default="")
+    subject = Column(String(10), default="math")
     grade = Column(String(4))
     problem_blob_id = Column(Integer, ForeignKey("blobs.id"))
     answer_blob_id = Column(Integer, ForeignKey("blobs.id"))
@@ -189,7 +202,9 @@ class Setting(Base):
 DEFAULT_SETTINGS = {
     "engine": "codex",          # codex(ChatGPT 구독) | claude(Claude 구독)
     "pass_score": "90",
-    "daily_cap": "300",
+    "cap_math": "300",          # 수학 하루 최대 적립
+    "cap_science": "200",       # 과학 하루 최대 적립
+    "reward_science": "20",     # 과학 문제 하나당 적립
     "mid_sample": "20",         # 중 문제 표본 수
     "mid_wrong": "0.5",         # 중 오답률 기준
     "hi_sample": "10",          # 상 문제 표본 수

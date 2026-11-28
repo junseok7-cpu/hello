@@ -14,7 +14,7 @@ from sqlalchemy import func
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import logic, reports
-from .db import (DEFAULT_SETTINGS, DIFFS, GRADES, KST, Blob, ImportJob, Ledger, Problem, Report,
+from .db import (DEFAULT_SETTINGS, DIFFS, GRADES, QTYPES, SUBJECTS, KST, Blob, ImportJob, Ledger, Problem, Report,
                  SessionLocal, StudentProblem, Submission, Unit, User, get_setting,
                  init_db, kst_today, now, set_setting)
 
@@ -39,7 +39,7 @@ def kst(dt):
 
 
 tpl.env.filters["kst"] = kst
-tpl.env.globals.update(GRADES=GRADES, DIFFS=DIFFS, STUDENT_GRADES=GRADES[:4])  # 지금 학생: 중1~고1
+tpl.env.globals.update(GRADES=GRADES, DIFFS=DIFFS, SUBJECTS=SUBJECTS, QTYPES=QTYPES, STUDENT_GRADES=GRADES[:4])  # 지금 학생: 중1~고1
 
 
 @app.on_event("startup")
@@ -189,30 +189,38 @@ def blob(bid: int, u: User = Depends(current_user), db=Depends(get_db)):
 
 # ---------------------------------------------------------------- 학생
 
-def student_ctx(db, u):
+def subj(v):
+    return v if v in SUBJECTS else "math"
+
+
+def student_ctx(db, u, subject="math"):
     today = kst_today()
-    cap = int(get_setting(db, "daily_cap"))
-    return dict(user=u, balance=logic.balance(db, u.id), used=logic.used_today(db, u.id, today), cap=cap)
+    caps = {k: dict(used=logic.used_today(db, u.id, today, k), cap=logic.cap_of(db, k)) for k in SUBJECTS}
+    return dict(user=u, balance=logic.balance(db, u.id), caps=caps, subject=subject,
+                used=caps[subject]["used"], cap=caps[subject]["cap"])
 
 
 @app.get("/s", response_class=HTMLResponse)
-def s_home(request: Request, u: User = Depends(current_user), db=Depends(get_db)):
+def s_home(request: Request, subject: str = "math", u: User = Depends(current_user), db=Depends(get_db)):
     if u.role == "teacher":
         return back("/t")
     if not u.grade:
         return render(request, "wait_grade.html", user=u)
-    p = logic.current_problem(db, u)
+    subject = subj(subject)
+    p = logic.current_problem(db, u, subject)
     db.commit()
-    sps = db.query(StudentProblem).filter_by(user_id=u.id).all()
+    sps = [x for x in db.query(StudentProblem).filter_by(user_id=u.id).all()
+           if x.problem.subject == subject]
     waiting = [x for x in sps if x.state == "waiting"]
     pending = [x for x in sps if x.state == "pending"]
-    retry = logic.retry_list(db, u.id)
+    retry = [x for x in logic.retry_list(db, u.id) if x.problem.subject == subject]
     locked = [x for x in sps if x.state == "locked" and x not in retry]
-    recent = (db.query(Submission).filter_by(user_id=u.id)
-              .order_by(Submission.id.desc()).limit(8).all())
+    recent = [x for x in db.query(Submission).filter_by(user_id=u.id)
+              .order_by(Submission.id.desc()).limit(30).all() if x.problem.subject == subject][:8]
     return render(request, "s_home.html", problem=p, waiting=waiting, pending=pending,
                   retry=retry, locked=locked, recent=recent, now=now(),
-                  can_skip=logic.can_skip(u), **student_ctx(db, u))
+                  reward=logic.base_reward(db, p) if p else 0,
+                  can_skip=logic.can_skip(u, subject), **student_ctx(db, u, subject))
 
 
 @app.get("/s/p/{pid}", response_class=HTMLResponse)
@@ -221,14 +229,17 @@ def s_problem(pid: int, request: Request, u: User = Depends(current_user), db=De
     if not p:
         raise HTTPException(404)
     sp = logic.get_sp(db, u.id, pid)
-    if u.current_problem_id != pid and not sp:
+    if not logic.is_current(u, pid) and not sp:
         raise HTTPException(403, "아직 받지 않은 문제예요")
     subs = (db.query(Submission).filter_by(user_id=u.id, problem_id=pid)
             .order_by(Submission.id.desc()).all())
     show_solution = bool(sp and (sp.solution_revealed or sp.state == "solved"))
+    base = logic.base_reward(db, p)
+    retry = bool(sp and (sp.is_retry or sp.state == "locked"))
     return render(request, "s_problem.html", p=p, sp=sp, subs=subs,
                   can_submit=logic.can_submit(db, u, pid), show_solution=show_solution,
-                  max_fails=int(get_setting(db, "max_fails")), **student_ctx(db, u))
+                  reward=base // 2 if retry else base, QTYPES=QTYPES,
+                  max_fails=int(get_setting(db, "max_fails")), **student_ctx(db, u, p.subject))
 
 
 @app.post("/s/p/{pid}/submit")
@@ -246,14 +257,15 @@ async def s_submit(pid: int, photos: list[UploadFile] = File(...), typed_answer:
         raise HTTPException(400, "풀이 사진을 올려 주세요")
     logic.create_submission(db, u, p, ids, typed_answer)
     db.commit()
-    return back("/s?sent=1")
+    return back(f"/s?subject={p.subject}&sent=1")
 
 
 @app.post("/s/skip")
-def s_skip(u: User = Depends(current_user), db=Depends(get_db)):
-    ok = logic.skip_problem(db, u)
+def s_skip(subject: str = Form("math"), u: User = Depends(current_user), db=Depends(get_db)):
+    subject = subj(subject)
+    ok = logic.skip_problem(db, u, subject)
     db.commit()
-    return back("/s" if ok else "/s?noskip=1")
+    return back(f"/s?subject={subject}" + ("" if ok else "&noskip=1"))
 
 
 @app.post("/s/appeal/{sid}")
@@ -280,15 +292,15 @@ def grader_online(db):
     return bool(v) and now() - datetime.fromisoformat(v) < timedelta(minutes=3)
 
 
-def weak_matrix(db, students):
+def weak_matrix(db, students, subject="math"):
     """학생별 단원 상태표 (요구사항 10)."""
     rows = []
     for st in students:
         if not st.grade:
             continue
-        stats = logic.unit_stats(db, st.id)
+        stats = logic.unit_stats(db, st.id, subject)
         cells = []
-        for un in logic.eligible_units(db, st.grade):
+        for un in logic.eligible_units(db, st.grade, subject):
             s = stats.get(un.id, {"하": [0, 0], "중": [0, 0], "상": [0, 0]})
             n = sum(v[0] for v in s.values())
             w = sum(v[1] for v in s.values())
@@ -298,14 +310,15 @@ def weak_matrix(db, students):
 
 
 @app.get("/t", response_class=HTMLResponse)
-def t_home(request: Request, u: User = Depends(teacher), db=Depends(get_db)):
+def t_home(request: Request, subject: str = "math", u: User = Depends(teacher), db=Depends(get_db)):
     if reports.ensure_reports(db):
         db.commit()
+    subject = subj(subject)
     students = db.query(User).filter_by(role="student", active=True).order_by(User.grade, User.name).all()
     summary = []
     for st in students:
         summary.append(dict(st=st, balance=logic.balance(db, st.id),
-                            today=logic.used_today(db, st.id, kst_today()),
+                            today={k: logic.used_today(db, st.id, kst_today(), k) for k in SUBJECTS},
                             weak=[db.get(Unit, x) for x in logic.weak_units(db, st.id)]))
     counts = dict(
         queued=db.query(Submission).filter(Submission.status.in_(["queued", "grading"])).count(),
@@ -316,7 +329,7 @@ def t_home(request: Request, u: User = Depends(teacher), db=Depends(get_db)):
         no_grade=db.query(User).filter_by(role="student", grade=None).count())
     return render(request, "t_home.html", user=u, summary=summary, counts=counts,
                   online=grader_online(db), engine=get_setting(db, "engine"),
-                  matrix=weak_matrix(db, students))
+                  matrix=weak_matrix(db, students, subject), subject=subject)
 
 
 @app.get("/t/approvals", response_class=HTMLResponse)
@@ -378,7 +391,7 @@ def t_student_update(sid: int, grade: str = Form(""), active: str = Form("1"), n
         st.name = name
     st.grade = grade if grade in GRADES else None
     st.active = active == "1"
-    st.current_problem_id = None  # 학년이 바뀌면 다시 뽑기
+    st.current_problem_id = st.current_sci_id = None  # 학년이 바뀌면 다시 뽑기
     db.commit()
     return back("/t/students")
 
@@ -397,7 +410,7 @@ def t_student(sid: int, request: Request, u: User = Depends(teacher), db=Depends
     st = db.get(User, sid)
     subs = db.query(Submission).filter_by(user_id=sid).order_by(Submission.id.desc()).limit(60).all()
     ledger = db.query(Ledger).filter_by(user_id=sid).order_by(Ledger.id.desc()).limit(60).all()
-    matrix = weak_matrix(db, [st])
+    matrix = {k: weak_matrix(db, [st], k) for k in SUBJECTS}
     return render(request, "t_student.html", user=u, st=st, subs=subs, ledger=ledger,
                   balance=logic.balance(db, sid), matrix=matrix)
 
@@ -420,9 +433,11 @@ def t_regrade(sid: int, u: User = Depends(teacher), db=Depends(get_db)):
 # ----- 문제 관리
 
 @app.get("/t/problems", response_class=HTMLResponse)
-def t_problems(request: Request, grade: str = "", unit: int = 0, diff: str = "", status: str = "",
+def t_problems(request: Request, subject: str = "", grade: str = "", unit: int = 0, diff: str = "", status: str = "",
                job: int = 0, u: User = Depends(teacher), db=Depends(get_db)):
     q = db.query(Problem).join(Unit)
+    if subject:
+        q = q.filter(Unit.subject == subject)
     if grade:
         q = q.filter(Unit.grade == grade)
     if unit:
@@ -435,10 +450,11 @@ def t_problems(request: Request, grade: str = "", unit: int = 0, diff: str = "",
         q = q.filter(Problem.import_job_id == job)
     problems = q.order_by(Problem.id.desc()).limit(300).all()
     units = db.query(Unit).order_by(Unit.grade, Unit.order).all()
-    counts = (db.query(Unit.grade, Problem.difficulty, func.count(Problem.id)).join(Problem)
-              .filter(Problem.status == "published").group_by(Unit.grade, Problem.difficulty).all())
+    counts = (db.query(Unit.subject, Unit.grade, Problem.difficulty, func.count(Problem.id)).join(Problem)
+              .filter(Problem.status == "published")
+              .group_by(Unit.subject, Unit.grade, Problem.difficulty).order_by(Unit.subject, Unit.grade).all())
     return render(request, "t_problems.html", user=u, problems=problems, units=units,
-                  f=dict(grade=grade, unit=unit, diff=diff, status=status, job=job), counts=counts)
+                  f=dict(subject=subject, grade=grade, unit=unit, diff=diff, status=status, job=job), counts=counts)
 
 
 @app.post("/t/problems/bulk")
@@ -451,6 +467,7 @@ def t_bulk(ids: list[int] = Form([]), action: str = Form(...), u: User = Depends
         elif action == "delete" and not db.query(Submission).filter_by(problem_id=p.id).count():
             db.query(StudentProblem).filter_by(problem_id=p.id).delete()
             db.query(User).filter_by(current_problem_id=p.id).update({"current_problem_id": None})
+            db.query(User).filter_by(current_sci_id=p.id).update({"current_sci_id": None})
             db.delete(p)
     db.commit()
     return back("/t/problems?status=draft" if action != "draft" else "/t/problems")
@@ -464,7 +481,7 @@ def t_problem(pid: int, request: Request, u: User = Depends(teacher), db=Depends
 
 
 @app.post("/t/problem/{pid}")
-async def t_problem_save(pid: int, unit_id: int = Form(...), difficulty: str = Form(...),
+async def t_problem_save(pid: int, unit_id: int = Form(...), difficulty: str = Form(...), qtype: str = Form("essay"),
                          source: str = Form(""), body: str = Form(""), answer: str = Form(""),
                          solution: str = Form(""), status: str = Form("draft"),
                          remove_image: str = Form(""), remove_sol_image: str = Form(""),
@@ -475,6 +492,7 @@ async def t_problem_save(pid: int, unit_id: int = Form(...), difficulty: str = F
         p = Problem()
         db.add(p)
     p.unit_id, p.difficulty, p.source = unit_id, difficulty, source
+    p.qtype = qtype if qtype in QTYPES else "essay"
     p.body, p.answer, p.solution, p.status = body, answer, solution, status
     if remove_image:
         p.image_id = None
@@ -490,16 +508,16 @@ async def t_problem_save(pid: int, unit_id: int = Form(...), difficulty: str = F
 
 @app.get("/t/units", response_class=HTMLResponse)
 def t_units(request: Request, u: User = Depends(teacher), db=Depends(get_db)):
-    units = db.query(Unit).order_by(Unit.grade, Unit.order).all()
+    units = db.query(Unit).order_by(Unit.subject, Unit.grade, Unit.order).all()
     n = dict(db.query(Problem.unit_id, func.count(Problem.id)).group_by(Problem.unit_id).all())
     return render(request, "t_units.html", user=u, units=units, n=n)
 
 
 @app.post("/t/units")
-def t_units_save(action: str = Form(...), uid: int = Form(0), grade: str = Form(""),
+def t_units_save(action: str = Form(...), uid: int = Form(0), grade: str = Form(""), subject: str = Form("math"),
                  name: str = Form(""), order: int = Form(0), u: User = Depends(teacher), db=Depends(get_db)):
     if action == "add" and grade in GRADES and name.strip():
-        db.add(Unit(grade=grade, name=name.strip(), order=order))
+        db.add(Unit(subject=subj(subject), grade=grade, name=name.strip(), order=order))
     elif action == "save" and uid:
         un = db.get(Unit, uid)
         un.name, un.order = name.strip() or un.name, order
@@ -519,7 +537,8 @@ def t_import(request: Request, u: User = Depends(teacher), db=Depends(get_db)):
 
 
 @app.post("/t/import")
-async def t_import_post(title: str = Form(...), grade: str = Form(...), problems: UploadFile = File(...),
+async def t_import_post(title: str = Form(...), grade: str = Form(...), subject: str = Form("math"),
+                        problems: UploadFile = File(...),
                         answers: UploadFile | None = File(None), u: User = Depends(teacher), db=Depends(get_db)):
     def put(data, mime):
         b = Blob(data=data, mime=mime)
@@ -527,7 +546,7 @@ async def t_import_post(title: str = Form(...), grade: str = Form(...), problems
         db.flush()
         return b.id
     pdata = await problems.read()
-    job = ImportJob(title=title, grade=grade, problem_blob_id=put(pdata, "application/pdf"))
+    job = ImportJob(title=title, grade=grade, subject=subj(subject), problem_blob_id=put(pdata, "application/pdf"))
     if answers and answers.filename:
         job.answer_blob_id = put(await answers.read(), "application/pdf")
     db.add(job)
@@ -603,7 +622,8 @@ def _seen(db):
 
 
 def problem_json(p: Problem):
-    return dict(id=p.id, grade=p.grade, unit=p.unit.name, difficulty=p.difficulty, body=p.body,
+    return dict(id=p.id, subject=p.subject, qtype=p.qtype, grade=p.grade, unit=p.unit.name,
+                difficulty=p.difficulty, body=p.body,
                 answer=p.answer, solution=p.solution, image_id=p.image_id,
                 solution_image_id=p.solution_image_id)
 
@@ -628,9 +648,10 @@ def g_claim(db=Depends(get_db)):
     if j:
         j.status, j.claimed_at = "working", now()
         units = [dict(id=x.id, name=x.name) for x in
-                 db.query(Unit).filter_by(grade=j.grade).order_by(Unit.order)]
+                 db.query(Unit).filter_by(grade=j.grade, subject=j.subject or "math").order_by(Unit.order)]
         db.commit()
         return dict(type="import", engine=engine, job_id=j.id, title=j.title, grade=j.grade,
+                    subject=j.subject or "math",
                     problem_blob_id=j.problem_blob_id, answer_blob_id=j.answer_blob_id, units=units)
     if reports.ensure_reports(db):
         db.flush()
@@ -670,15 +691,19 @@ async def g_result(sid: int, request: Request, db=Depends(get_db)):
 
 
 @app.get("/api/grader/units", dependencies=[Depends(grader)])
-def g_units(grade: str = "", db=Depends(get_db)):
+def g_units(grade: str = "", subject: str = "", db=Depends(get_db)):
     q = db.query(Unit)
     if grade:
         q = q.filter_by(grade=grade)
-    return [dict(id=x.id, grade=x.grade, name=x.name) for x in q.order_by(Unit.grade, Unit.order)]
+    if subject:
+        q = q.filter_by(subject=subject)
+    return [dict(id=x.id, subject=x.subject, grade=x.grade, name=x.name)
+            for x in q.order_by(Unit.subject, Unit.grade, Unit.order)]
 
 
 @app.post("/api/grader/problem", dependencies=[Depends(grader)])
 async def g_problem(unit_id: int = Form(...), difficulty: str = Form(...), body: str = Form(""),
+                    qtype: str = Form("essay"),
                     answer: str = Form(""), solution: str = Form(""), source: str = Form(""),
                     status: str = Form("draft"), job_id: int = Form(0),
                     image: UploadFile | None = File(None), sol_image: UploadFile | None = File(None),
@@ -687,6 +712,7 @@ async def g_problem(unit_id: int = Form(...), difficulty: str = Form(...), body:
     if difficulty not in DIFFS or not db.get(Unit, unit_id):
         raise HTTPException(400, "unit/difficulty")
     p = Problem(unit_id=unit_id, difficulty=difficulty, body=body, answer=answer, solution=solution,
+                qtype=qtype if qtype in QTYPES else "essay",
                 source=source, status=status if status in ("draft", "published") else "draft",
                 import_job_id=job_id or None)
     if image and image.filename:

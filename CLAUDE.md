@@ -29,9 +29,9 @@
 4. **피드백 반영**: "자막 더 크게", "컷 덜 타이트하게" 같은 요청은 `style.json` 값을 바꿔서 해결한다 (`font_size_ratio`, `max_gap` 등). 이번 영상에만 해당하면 그렇다고 말하고 되돌린다.
 5. 결과를 말하기 전에 `ffmpeg -ss <초> -i output/... -frames:v 1 work/frame.jpg`로 프레임을 뽑아 직접 확인한다.
 
-# 수학 적립 사이트 (`math-site/`)
+# 수학·과학 적립 사이트 (`math-site/`)
 
-중·고등학생 서술형 수학 적립 학습 사이트. 설명은 `math-site/README.md`.
-- **문제집 등록 요청** ("inbox 문제집 등록해 줘"): `math-site/inbox/`의 PDF를 쪽별로 이미지로 뽑아 직접 읽고 → 문제마다 학년·단원(사이트 단원명과 똑같이)·난이도(하/중/상)·본문(LaTeX `$...$`)·답·풀이를 `problems.json` 묶음으로 만든다. 그림 있는 문제만 잘라서 `img/`에 넣는다. → `python math-site/tools/upload_bundle.py <묶음폴더>` (기본은 초안, 선생님이 확인 후 출제)
+중·고등학생 서술형 수학·과학 적립 학습 사이트 (과목별 규칙은 `app/logic.py`의 `RULES`). 설명은 `math-site/README.md`.
+- **문제집 등록 요청** ("inbox 문제집 등록해 줘"): `math-site/inbox/`의 PDF를 쪽별로 이미지로 뽑아 직접 읽고 → 문제마다 과목(`subject`: math/science)·유형(`qtype`: essay/calc/mc_right/mc_wrong)·학년·단원(사이트 단원명과 똑같이)·난이도(하/중/상)·본문(LaTeX `$...$`)·답·풀이를 `problems.json` 묶음으로 만든다. 그림 있는 문제만 잘라서 `img/`에 넣는다. → `python math-site/tools/upload_bundle.py <묶음폴더>` (기본은 초안, 선생님이 확인 후 출제)
 - 출제·적립 규칙을 바꾸면 `math-site/tests/test_logic.py`도 같이 고치고 `python -m pytest math-site/tests` 통과 확인
 - 채점 기준 문구는 `math-site/grader/prompts.py`

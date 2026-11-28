@@ -2,7 +2,7 @@
 {% from "_macros.html" import status_text %}
 {% block body %}
 <section class="stats"><div class="stat"><span>내 적립금</span><b>{{ "{:,}".format(balance) }}원</b></div>
-<div class="stat"><span>오늘 적립</span><b>{{ used }} / {{ cap }}원</b></div></section>
+{% for k, v in SUBJECTS.items() %}<div class="stat"><span>오늘 {{ v }}</span><b>{{ caps[k].used }} / {{ caps[k].cap }}원</b></div>{% endfor %}</section>
 <section class="card"><h3>적립·지급 내역</h3>
 <table><tr><th>날짜</th><th>내용</th><th class="r">금액</th></tr>
 {% for l in ledger %}<tr><td>{{ l.kst_date }}</td><td>{{ l.memo }}</td><td class="r {{ 'won' if l.amount>0 else 'neg' }}">{{ '%+d'|format(l.amount) }}원</td></tr>{% endfor %}

@@ -12,13 +12,14 @@
 {% if counts.no_grade %}<p class="alert"><a href="/t/students">학년이 정해지지 않은 학생 {{ counts.no_grade }}명</a>이 기다리고 있어요.</p>{% endif %}
 
 <section class="card"><h2>학생 한눈에 보기</h2>
-<table><tr><th>학생</th><th>학년</th><th class="r">적립금</th><th class="r">오늘</th><th>취약단원</th></tr>
+<table><tr><th>학생</th><th>학년</th><th class="r">적립금</th><th class="r">오늘 수학</th><th class="r">오늘 과학</th><th>취약단원</th></tr>
 {% for r in summary %}<tr><td><a href="/t/student/{{ r.st.id }}">{{ r.st.name }}</a></td><td>{{ r.st.grade or '-' }}</td>
-<td class="r">{{ "{:,}".format(r.balance) }}</td><td class="r">{{ r.today }}</td>
-<td>{% for w in r.weak %}<span class="badge bad">{{ w.grade }} {{ w.name }}</span> {% else %}<span class="muted">없음</span>{% endfor %}</td></tr>{% endfor %}
+<td class="r">{{ "{:,}".format(r.balance) }}</td><td class="r">{{ r.today.math }}</td><td class="r">{{ r.today.science }}</td>
+<td>{% for w in r.weak %}<span class="badge bad">{{ SUBJECTS[w.subject] }} {{ w.grade }} {{ w.name }}</span> {% else %}<span class="muted">없음</span>{% endfor %}</td></tr>{% endfor %}
 </table></section>
 
 <section class="card"><h2>단원별 상태</h2>
+<nav class="tabs">{% for k, v in SUBJECTS.items() %}<a href="/t?subject={{ k }}" class="{{ 'on' if k == subject }}">{{ v }}</a>{% endfor %}</nav>
 <p class="muted"><span class="cell weak">취약</span> <span class="cell ok">괜찮음</span> <span class="cell collecting">표본 모으는 중</span> · 칸 안 숫자 = 중 오답/채점, 상 오답/채점</p>
 {% for r in matrix %}
 <h4><a href="/t/student/{{ r.student.id }}">{{ r.student.name }}</a> <span class="muted">{{ r.student.grade }}</span></h4>

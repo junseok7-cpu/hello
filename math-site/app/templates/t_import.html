@@ -8,13 +8,14 @@
 <p class="muted">한 번에 20~30쪽 정도로 나눠 올리면 빠르고 정확해요. 한 PDF는 한 학년으로 맞춰 주세요.</p>
 <form method="post" enctype="multipart/form-data" class="stack">
 <label>이름 <input name="title" required placeholder="예: 쎈 중2-1 1단원"></label>
+<label>과목 <select name="subject">{% for k, v in SUBJECTS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
 <label>학년 <select name="grade">{% for g in GRADES %}<option>{{ g }}</option>{% endfor %}</select></label>
 <label>문제 PDF <input type="file" name="problems" accept="application/pdf" required></label>
 <label>답지 PDF (선택) <input type="file" name="answers" accept="application/pdf"></label>
 <button class="btn big">올리기</button></form></section>
 <section class="card"><h3>작업 목록</h3><table>
-<tr><th>#</th><th>이름</th><th>학년</th><th>상태</th><th>문제</th><th>기록</th></tr>
-{% for j in jobs %}<tr><td>{{ j.id }}</td><td>{{ j.title }}</td><td>{{ j.grade }}</td>
+<tr><th>#</th><th>이름</th><th>과목</th><th>학년</th><th>상태</th><th>문제</th><th>기록</th></tr>
+{% for j in jobs %}<tr><td>{{ j.id }}</td><td>{{ j.title }}</td><td>{{ SUBJECTS[j.subject or 'math'] }}</td><td>{{ j.grade }}</td>
 <td>{{ {'queued':'대기','working':'처리 중','done':'완료','error':'오류'}[j.status] }}</td>
 <td><a href="/t/problems?job={{ j.id }}">{{ n.get(j.id, 0) }}개</a></td><td class="muted small">{{ j.log[:200] }}</td></tr>{% endfor %}
 </table></section>

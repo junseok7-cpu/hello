@@ -2,10 +2,11 @@
 {% from "_macros.html" import diff_badge %}
 {% block body %}
 <h2>문제 은행 <a class="btn small" href="/t/problem/0">+ 직접 추가</a></h2>
-<p class="muted">출제 중: {% for g, d, c in counts %}{{ g }} {{ d }} {{ c }}개{{ ', ' if not loop.last }}{% else %}없음{% endfor %}</p>
+<p class="muted">출제 중: {% for sj, g, d, c in counts %}{{ SUBJECTS[sj] }} {{ g }} {{ d }} {{ c }}개{{ ', ' if not loop.last }}{% else %}없음{% endfor %}</p>
 <form class="row card" method="get">
+<select name="subject"><option value="">전체 과목</option>{% for k, v in SUBJECTS.items() %}<option value="{{ k }}" {{ 'selected' if f.subject==k }}>{{ v }}</option>{% endfor %}</select>
 <select name="grade"><option value="">전체 학년</option>{% for g in GRADES %}<option {{ 'selected' if f.grade==g }}>{{ g }}</option>{% endfor %}</select>
-<select name="unit"><option value="0">전체 단원</option>{% for un in units %}<option value="{{ un.id }}" {{ 'selected' if f.unit==un.id }}>{{ un.grade }} {{ un.name }}</option>{% endfor %}</select>
+<select name="unit"><option value="0">전체 단원</option>{% for un in units %}<option value="{{ un.id }}" {{ 'selected' if f.unit==un.id }}>{{ SUBJECTS[un.subject] }} {{ un.grade }} {{ un.name }}</option>{% endfor %}</select>
 <select name="diff"><option value="">전체 난이도</option>{% for d in DIFFS %}<option {{ 'selected' if f.diff==d }}>{{ d }}</option>{% endfor %}</select>
 <select name="status"><option value="">전체 상태</option><option value="draft" {{ 'selected' if f.status=='draft' }}>초안(검토 전)</option><option value="published" {{ 'selected' if f.status=='published' }}>출제 중</option></select>
 <button class="btn small">보기</button></form>
@@ -17,7 +18,8 @@
 <div class="plist">
 {% for p in problems %}
 <div class="pitem {{ p.status }}"><input class="pick" type="checkbox" name="ids" value="{{ p.id }}">
-<a href="/t/problem/{{ p.id }}"><b>#{{ p.id }}</b> {{ diff_badge(p.difficulty) }} {{ p.unit.grade }} {{ p.unit.name }}
+<a href="/t/problem/{{ p.id }}"><b>#{{ p.id }}</b> {{ diff_badge(p.difficulty) }} <span class="badge subj-{{ p.subject }}">{{ SUBJECTS[p.subject] }}</span> {{ p.unit.grade }} {{ p.unit.name }}
+{% if p.qtype != 'essay' %}<span class="muted small">{{ QTYPES[p.qtype] }}</span>{% endif %}
 {% if p.status=='draft' %}<span class="badge wait">초안</span>{% endif %}
 <div class="math clip">{{ p.body[:140] }}</div>
 {% if p.image_id %}<img class="mini" src="/blob/{{ p.image_id }}">{% endif %}

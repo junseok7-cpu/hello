@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from sqlalchemy import func
 
-from .db import (GRADES, Ledger, Problem, StudentProblem, Submission, Unit, User,
+from .db import (DIFFS, GRADES, Ledger, Problem, StudentProblem, Submission, Unit, User,
                  get_setting, kst_today, now)
 
 
@@ -12,28 +12,55 @@ def _f(db, key):
     return float(get_setting(db, key))
 
 
+# ---------- 과목별 규칙 ----------
+# math: 하·중 10원 / 상 100원, 아래 학년은 '상'만
+# science: 모든 문제 20원(설정 reward_science), 아래 학년 안 냄, 하→중→상 돌아가며 섞어 냄
+RULES = {
+    "math": dict(cap="cap_math", lower_grades="상", mix=False,
+                 cur="current_problem_id", skip="skip_date"),
+    "science": dict(cap="cap_science", lower_grades=None, mix=True,
+                    cur="current_sci_id", skip="skip_date_sci"),
+}
+
+
+def subject_of(p: Problem) -> str:
+    return p.unit.subject if p.unit else "math"
+
+
+def base_reward(db, p: Problem) -> int:
+    if subject_of(p) == "science":
+        return int(get_setting(db, "reward_science"))
+    return 100 if p.difficulty == "상" else 10
+
+
 # ---------- 학년 범위 (요구사항 14) ----------
 
-def eligible(problem_grade: str, difficulty: str, student_grade: str) -> bool:
-    """자기 학년은 전 난이도, 아래 학년은 '상'만."""
+def eligible(problem_grade: str, difficulty: str, student_grade: str, subject="math") -> bool:
+    """수학: 자기 학년 전 난이도 + 아래 학년 '상'만. 과학: 자기 학년만."""
     if problem_grade not in GRADES or student_grade not in GRADES:
         return False
     pg, sg = GRADES.index(problem_grade), GRADES.index(student_grade)
-    return pg == sg or (pg < sg and difficulty == "상")
+    lower = RULES[subject]["lower_grades"]
+    return pg == sg or (pg < sg and lower is not None and difficulty == lower)
 
 
-def eligible_units(db, student_grade):
+def eligible_units(db, student_grade, subject="math"):
     sg = GRADES.index(student_grade)
-    return db.query(Unit).filter(Unit.grade.in_(GRADES[:sg + 1])).order_by(Unit.grade, Unit.order).all()
+    grades = GRADES[:sg + 1] if RULES[subject]["lower_grades"] else [student_grade]
+    return (db.query(Unit).filter(Unit.subject == subject, Unit.grade.in_(grades))
+            .order_by(Unit.grade, Unit.order).all())
 
 
 # ---------- 취약단원 (요구사항 10, 12, 13) ----------
 
-def unit_stats(db, user_id):
+def unit_stats(db, user_id, subject=None):
     """단원별 {중: [채점수, 오답수], 상: [...], 하: [...]} — 채점된 모든 제출 기준."""
-    rows = (db.query(Problem.unit_id, Problem.difficulty, Submission.score, Submission.reward_status)
-            .join(Submission, Submission.problem_id == Problem.id)
-            .filter(Submission.user_id == user_id, Submission.status == "graded").all())
+    q = (db.query(Problem.unit_id, Problem.difficulty, Submission.score, Submission.reward_status)
+         .join(Submission, Submission.problem_id == Problem.id)
+         .filter(Submission.user_id == user_id, Submission.status == "graded"))
+    if subject:
+        q = q.join(Unit, Unit.id == Problem.unit_id).filter(Unit.subject == subject)
+    rows = q.all()
     pass_score = int(get_setting(db, "pass_score"))
     stats = {}
     for unit_id, diff, score, rstatus in rows:
@@ -58,59 +85,82 @@ def judge_unit(db, s):
     return "ok" if (mid_ready or hi_ready) else "collecting"
 
 
-def weak_units(db, user_id):
-    return [uid for uid, s in unit_stats(db, user_id).items() if judge_unit(db, s) == "weak"]
+def weak_units(db, user_id, subject=None):
+    return [uid for uid, s in unit_stats(db, user_id, subject).items() if judge_unit(db, s) == "weak"]
 
 
 # ---------- 출제 (요구사항 11, 13, 14) ----------
 
-def fresh_pool(db, user: User):
+def fresh_pool(db, user: User, subject="math"):
     """아직 손대지 않은 출제 가능 문제."""
     touched = db.query(StudentProblem.problem_id).filter(StudentProblem.user_id == user.id)
     sg = GRADES.index(user.grade)
     lower = GRADES[:sg]
-    q = (db.query(Problem).join(Unit).filter(Problem.status == "published",
-                                             ~Problem.id.in_(touched))
-         .filter((Unit.grade == user.grade) | ((Unit.grade.in_(lower)) & (Problem.difficulty == "상"))))
+    q = (db.query(Problem).join(Unit).filter(Problem.status == "published", Unit.subject == subject,
+                                             ~Problem.id.in_(touched)))
+    lower_diff = RULES[subject]["lower_grades"]
+    if lower_diff:
+        q = q.filter((Unit.grade == user.grade) | ((Unit.grade.in_(lower)) & (Problem.difficulty == lower_diff)))
+    else:
+        q = q.filter(Unit.grade == user.grade)
     return q.all()
 
 
-def pick_problem(db, user: User, rng=random, exclude=None):
-    pool = [p for p in fresh_pool(db, user) if p.id != exclude]
+def _next_diff(db, user: User, subject):
+    """섞어 내기: 이 과목에서 받은 문제 수에 따라 하 → 중 → 상 → 하 ..."""
+    n = (db.query(StudentProblem).join(Problem).join(Unit)
+         .filter(StudentProblem.user_id == user.id, Unit.subject == subject).count())
+    return DIFFS[n % 3]
+
+
+def pick_problem(db, user: User, subject="math", rng=random, exclude=None):
+    pool = [p for p in fresh_pool(db, user, subject) if p.id != exclude]
     if not pool:
         return None
-    weak = set(weak_units(db, user.id))
+    if RULES[subject]["mix"]:
+        target = _next_diff(db, user, subject)
+        same = [p for p in pool if p.difficulty == target]
+        pool = same or pool  # 그 난이도가 다 떨어졌으면 남은 것에서
+    weak = set(weak_units(db, user.id, subject))
     weak_pool = [p for p in pool if p.unit_id in weak]
     if weak_pool and rng.random() < _f(db, "weak_ratio"):
         return rng.choice(weak_pool)
     return rng.choice(pool)
 
 
-def current_problem(db, user: User):
+def current_problem(db, user: User, subject="math"):
     """지금 풀 문제. 없으면 새로 뽑아 고정 (새로고침으로 바꾸기 방지)."""
-    if user.current_problem_id:
-        p = db.get(Problem, user.current_problem_id)
+    attr = RULES[subject]["cur"]
+    pid = getattr(user, attr)
+    if pid:
+        p = db.get(Problem, pid)
         if p and p.status == "published":
             return p
-    p = pick_problem(db, user)
-    user.current_problem_id = p.id if p else None
+    p = pick_problem(db, user, subject)
+    setattr(user, attr, p.id if p else None)
     return p
 
 
-def can_skip(user: User):
-    return user.skip_date != kst_today()
+def can_skip(user: User, subject="math"):
+    return getattr(user, RULES[subject]["skip"]) != kst_today()
 
 
-def skip_problem(db, user: User, rng=random):
-    """오늘의 문제 건너뛰기 (하루 1번). 건너뛴 문제는 나중에 다시 나올 수 있다."""
-    if not can_skip(user) or not user.current_problem_id:
+def skip_problem(db, user: User, subject="math", rng=random):
+    """오늘의 문제 건너뛰기 (과목마다 하루 1번). 건너뛴 문제는 나중에 다시 나올 수 있다."""
+    r = RULES[subject]
+    cur = getattr(user, r["cur"])
+    if not can_skip(user, subject) or not cur:
         return False
-    new = pick_problem(db, user, rng, exclude=user.current_problem_id)
+    new = pick_problem(db, user, subject, rng, exclude=cur)
     if new is None:
         return False
-    user.current_problem_id = new.id
-    user.skip_date = kst_today()
+    setattr(user, r["cur"], new.id)
+    setattr(user, r["skip"], kst_today())
     return True
+
+
+def is_current(user: User, problem_id):
+    return problem_id in (user.current_problem_id, user.current_sci_id)
 
 
 def retry_list(db, user_id):
@@ -129,7 +179,7 @@ def retry_list(db, user_id):
 
 
 def can_submit(db, user: User, problem_id: int):
-    if user.current_problem_id == problem_id:
+    if is_current(user, problem_id):
         sp = get_sp(db, user.id, problem_id)
         return sp is None or sp.state == "open" or _lock_over(sp)
     sp = get_sp(db, user.id, problem_id)
@@ -158,25 +208,33 @@ def create_submission(db, user: User, problem: Problem, image_ids, typed_answer=
                      typed_answer=typed_answer[:300], is_retry=bool(sp.is_retry),
                      kst_date=kst_today())
     db.add(sub)
-    if user.current_problem_id == problem.id:
-        user.current_problem_id = None
+    for r in RULES.values():
+        if getattr(user, r["cur"]) == problem.id:
+            setattr(user, r["cur"], None)
     db.flush()
     return sub
 
 
 # ---------- 적립 (요구사항 3, 7, 9) ----------
 
-def used_today(db, user_id, kst_date, exclude_sub_id=None):
-    """그날 적립된 금액 + 승인 대기로 예약된 금액."""
+def used_today(db, user_id, kst_date, subject="math", exclude_sub_id=None):
+    """그날 그 과목에서 적립된 금액 + 승인 대기로 예약된 금액."""
     credited = (db.query(func.coalesce(func.sum(Ledger.amount), 0))
+                .join(Submission, Submission.id == Ledger.submission_id)
+                .join(Problem, Problem.id == Submission.problem_id).join(Unit, Unit.id == Problem.unit_id)
                 .filter(Ledger.user_id == user_id, Ledger.kind == "reward",
-                        Ledger.kst_date == kst_date).scalar())
-    q = db.query(func.coalesce(func.sum(Submission.reward_amount), 0)).filter(
-        Submission.user_id == user_id, Submission.kst_date == kst_date,
-        Submission.reward_status == "pending")
+                        Ledger.kst_date == kst_date, Unit.subject == subject).scalar())
+    q = (db.query(func.coalesce(func.sum(Submission.reward_amount), 0))
+         .join(Problem, Problem.id == Submission.problem_id).join(Unit, Unit.id == Problem.unit_id)
+         .filter(Submission.user_id == user_id, Submission.kst_date == kst_date,
+                 Submission.reward_status == "pending", Unit.subject == subject))
     if exclude_sub_id:
         q = q.filter(Submission.id != exclude_sub_id)
     return int(credited) + int(q.scalar())
+
+
+def cap_of(db, subject):
+    return int(get_setting(db, RULES[subject]["cap"]))
 
 
 def balance(db, user_id):
@@ -184,15 +242,15 @@ def balance(db, user_id):
                .filter(Ledger.user_id == user_id).scalar())
 
 
-def reward_for(sub: Submission):
-    base = sub.problem.reward
+def reward_for(db, sub: Submission):
+    base = base_reward(db, sub.problem)
     return base // 2 if sub.is_retry else base
 
 
 def _apply_pass(db, sub: Submission, sp: StudentProblem):
-    cap = int(get_setting(db, "daily_cap"))
-    room = max(0, cap - used_today(db, sub.user_id, sub.kst_date, exclude_sub_id=sub.id))
-    amount = min(reward_for(sub), room)
+    subj = subject_of(sub.problem)
+    room = max(0, cap_of(db, subj) - used_today(db, sub.user_id, sub.kst_date, subj, exclude_sub_id=sub.id))
+    amount = min(reward_for(db, sub), room)
     sub.reward_amount = amount
     if sub.problem.difficulty == "상" and amount > 0:
         sub.reward_status = "pending"  # 선생님 승인 후 적립

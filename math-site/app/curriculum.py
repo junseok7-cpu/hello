@@ -2,6 +2,9 @@
 
 2026학년도 기준: 중1·중2·고1·고2는 2022 개정, 중3·고3은 2015 개정 교육과정.
 교재 목차와 다르면 관리 페이지에서 고치면 된다.
+
+과학 중1·중2(2022 개정)는 출판사마다 단원 배치가 달라 확인된 목록이 없어서 4개 영역으로만 넣었다.
+쓰는 교재 목차로 바꿔 쓸 것. 고1 통합과학1·2 대단원과 중3(2015 개정) 단원은 확인된 이름.
 """
 from .db import Unit
 
@@ -32,9 +35,22 @@ UNITS = {
 }
 
 
+SCIENCE_UNITS = {
+    "중1": ["물리 (힘·에너지·빛과 파동)", "화학 (물질의 구성·상태 변화)", "생명 (생물의 구성과 다양성)",
+            "지구 (지구계·태양계)"],
+    "중2": ["물리 (힘·에너지·빛과 파동)", "화학 (물질의 특성·혼합물의 분리)", "생명 (생물의 구조와 기능)",
+            "지구 (지구계·태양계)"],
+    "중3": ["화학 반응의 규칙과 에너지 변화", "기권과 날씨", "운동과 에너지", "자극과 반응",
+            "생식과 유전", "에너지 전환과 보존", "별과 우주", "과학기술과 인류 문명"],
+    "고1": ["[통합과학1] 과학의 기초", "[통합과학1] 물질과 규칙성", "[통합과학1] 시스템과 상호작용",
+            "[통합과학2] 변화와 다양성", "[통합과학2] 환경과 에너지", "[통합과학2] 과학과 미래 사회"],
+}
+
+
 def seed_units(db):
-    if db.query(Unit).count():
-        return
-    for grade, names in UNITS.items():
-        for i, name in enumerate(names):
-            db.add(Unit(grade=grade, order=i, name=name))
+    for subject, table in (("math", UNITS), ("science", SCIENCE_UNITS)):
+        if db.query(Unit).filter_by(subject=subject).count():
+            continue
+        for grade, names in table.items():
+            for i, name in enumerate(names):
+                db.add(Unit(subject=subject, grade=grade, order=i, name=name))

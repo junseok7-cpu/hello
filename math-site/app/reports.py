@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import func
 
 from . import logic
-from .db import KST, Ledger, Report, Submission, Unit, User, get_setting
+from .db import KST, SUBJECTS, Ledger, Report, Submission, Unit, User, get_setting
 
 
 def _d(s):
@@ -39,11 +39,11 @@ def today_kst():
     return datetime.now(KST).date()
 
 
-def collect(db, user: User, start: str, end: str) -> dict:
+def _collect_subject(db, user: User, start: str, end: str, subject: str, prev: dict | None) -> dict:
     pass_score = int(get_setting(db, "pass_score"))
-    subs = (db.query(Submission).filter(Submission.user_id == user.id,
-                                        Submission.kst_date >= start, Submission.kst_date <= end)
-            .order_by(Submission.id).all())
+    subs = [s for s in (db.query(Submission).filter(Submission.user_id == user.id,
+                                                     Submission.kst_date >= start, Submission.kst_date <= end)
+                        .order_by(Submission.id).all()) if s.problem.subject == subject]
     graded = [s for s in subs if s.status == "graded"]
 
     def ok(s):
@@ -60,31 +60,39 @@ def collect(db, user: User, start: str, end: str) -> dict:
         u["n"] += 1
         u["pass"] += ok(s)
     units = sorted(by_unit.values(), key=lambda x: (-(x["n"] - x["pass"]) / max(1, x["n"]), -x["n"]))
-
-    def ledger_sum(kind):
-        return int(db.query(func.coalesce(func.sum(Ledger.amount), 0)).filter(
-            Ledger.user_id == user.id, Ledger.kind == kind,
-            Ledger.kst_date >= start, Ledger.kst_date <= end).scalar())
-
+    earned = sum(int(l.amount) for l in db.query(Ledger).filter(
+        Ledger.user_id == user.id, Ledger.kind == "reward",
+        Ledger.kst_date >= start, Ledger.kst_date <= end).all()
+        if l.submission_id and db.get(Submission, l.submission_id).problem.subject == subject)
     passed = sum(ok(s) for s in graded)
-    prev = (db.query(Report).filter(Report.user_id == user.id, Report.period_end < end)
-            .order_by(Report.period_end.desc()).first())
-    prev_rate = json.loads(prev.data).get("pass_rate") if prev else None
     return dict(
-        name=user.name, grade=user.grade, start=start, end=end,
         submissions=len(subs), graded=len(graded), passed=passed,
         pass_rate=round(passed * 100 / len(graded)) if graded else None,
-        prev_pass_rate=prev_rate,
+        prev_pass_rate=(prev or {}).get("pass_rate"),
         active_days=len({s.kst_date for s in subs}),
         retry_pass=sum(1 for s in graded if s.is_retry and ok(s)),
-        by_diff=by_diff, units=units,
-        earned=ledger_sum("reward"), paid=-ledger_sum("payout"), balance=logic.balance(db, user.id),
+        by_diff=by_diff, units=units, earned=earned,
         capped_days=len({s.kst_date for s in subs if s.reward_status == "capped"}),
         appeals=sum(1 for s in subs if s.appeal_status != "none"),
         appeals_accepted=sum(1 for s in subs if s.appeal_status == "accepted"),
         weak_units=[f"{x.grade} {x.name}" for x in
-                    (db.get(Unit, i) for i in logic.weak_units(db, user.id)) if x],
+                    (db.get(Unit, i) for i in logic.weak_units(db, user.id, subject)) if x],
     )
+
+
+def collect(db, user: User, start: str, end: str) -> dict:
+    prev = (db.query(Report).filter(Report.user_id == user.id, Report.period_end < end)
+            .order_by(Report.period_end.desc()).first())
+    prev_subjects = json.loads(prev.data).get("subjects", {}) if prev else {}
+    subjects = {k: _collect_subject(db, user, start, end, k, prev_subjects.get(k)) for k in SUBJECTS}
+    paid = -int(db.query(func.coalesce(func.sum(Ledger.amount), 0)).filter(
+        Ledger.user_id == user.id, Ledger.kind == "payout",
+        Ledger.kst_date >= start, Ledger.kst_date <= end).scalar())
+    days = {s.kst_date for s in db.query(Submission).filter(
+        Submission.user_id == user.id, Submission.kst_date >= start, Submission.kst_date <= end)}
+    return dict(name=user.name, grade=user.grade, start=start, end=end, subjects=subjects,
+                active_days=len(days), earned=sum(v["earned"] for v in subjects.values()),
+                paid=paid, balance=logic.balance(db, user.id))
 
 
 def ensure_reports(db, today: date | None = None) -> int:

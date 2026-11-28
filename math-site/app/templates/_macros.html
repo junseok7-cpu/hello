@@ -2,7 +2,7 @@
 
 {% macro problem_view(p, show_meta=true, both=false) %}
 <div class="problem">
-  {% if show_meta %}<div class="meta">{{ diff_badge(p.difficulty) }} {{ p.unit.grade }} · {{ p.unit.name }}{% if p.source %} · <span class="muted">{{ p.source }}</span>{% endif %}</div>{% endif %}
+  {% if show_meta %}<div class="meta">{{ diff_badge(p.difficulty) }} <span class="badge subj-{{ p.subject }}">{{ SUBJECTS[p.subject] }}</span> {{ p.unit.grade }} · {{ p.unit.name }}{% if p.source %} · <span class="muted">{{ p.source }}</span>{% endif %}</div>{% endif %}
   {% if p.body and (both or not p.image_id) %}<div class="math body">{{ p.body }}</div>{% endif %}
   {% if p.image_id %}<img class="pimg" src="/blob/{{ p.image_id }}" alt="문제 그림">{% endif %}
 </div>
@@ -30,4 +30,14 @@
   {%- if s.appeal_status == 'open' %} <span class="badge wait">이의신청 중</span>
   {%- elif s.appeal_status == 'accepted' %} <span class="badge good">이의 인정</span>
   {%- elif s.appeal_status == 'rejected' %} <span class="muted">이의 기각</span>{% endif %}
+{% endmacro %}
+
+{% macro howto(p) %}
+<div class="howto">✏️ <b>노트에 쓸 것:</b>
+{%- if p.qtype == 'mc_right' %} 정답 번호 + <b>나머지 선지가 왜 틀렸는지</b> 하나씩
+{%- elif p.qtype == 'mc_wrong' %} 정답 번호 + <b>그 선지가 왜 옳지 않은지</b> (바르게 고친 내용까지)
+{%- elif p.qtype == 'calc' %} <b>풀이 과정</b>과 답 (식, 단위까지)
+{%- elif p.subject == 'science' %} 답 + <b>그렇게 생각한 이유(근거)</b>
+{%- else %} <b>풀이 과정</b>과 답{% endif %}
+</div>
 {% endmacro %}
