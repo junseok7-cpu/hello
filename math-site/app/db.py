@@ -255,6 +255,24 @@ def migrate_blob_schema(conn):
             conn.execute(text(f"ALTER TABLE blobs ADD COLUMN {guard}{name} {sql_type}"))
 
 
+def add_missing_columns(conn):
+    """배포 뒤에 모델에 추가된 칸을 기존 DB에 채워 넣는다 (NULL 허용으로)."""
+    insp = inspect(conn)
+    for table in Base.metadata.sorted_tables:
+        if not insp.has_table(table.name):
+            continue
+        have = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name in have:
+                continue
+            sql_type = col.type.compile(dialect=conn.dialect)
+            default = ""
+            if col.default is not None and getattr(col.default, "is_scalar", False):
+                v = col.default.arg
+                default = f" DEFAULT {int(v)}" if isinstance(v, (bool, int)) else " DEFAULT '" + str(v).replace("'", "''") + "'"
+            conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN "{col.name}" {sql_type}{default}'))
+
+
 def init_db():
     Base.metadata.create_all(engine)
     with engine.begin() as conn:
@@ -268,6 +286,7 @@ def init_db():
             )).first()
             if not duplicate:
                 conn.execute(text("CREATE UNIQUE INDEX uq_ledger_submission ON ledger (submission_id)"))
+        add_missing_columns(conn)
     from .curriculum import seed_units
     with SessionLocal() as db:
         seed_units(db)

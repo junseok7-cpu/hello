@@ -896,6 +896,22 @@ async def g_report(rid: int, request: Request, db=Depends(get_db)):
     return dict(ok=True)
 
 
+@app.middleware("http")
+async def _grader_errors(request: Request, call_next):
+    """채점 PC용 API에서 난 오류는 원인을 돌려준다 (토큰이 있어야 닿는 주소)."""
+    try:
+        return await call_next(request)
+    except Exception as e:
+        if request.url.path.startswith("/api/grader/"):
+            import logging
+            import traceback
+            logging.getLogger("uvicorn.error").error("grader API error\n%s", traceback.format_exc())
+            tok = request.headers.get("X-Grader-Token", "").encode()
+            if hmac.compare_digest(tok, GRADER_TOKEN.encode()):
+                return JSONResponse({"error": type(e).__name__, "detail": str(e)[:500]}, status_code=500)
+        raise
+
+
 @app.get("/healthz")
 def healthz():
     return JSONResponse({"ok": True})
