@@ -14,6 +14,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # math-site/
 FILES = ["app/logic.py", "app/main.py", "app/reports.py", "app/db.py", "app/curriculum.py",
+         "grader/docread.py", "grader/ingest.py", "grader/hwpeq.py", "tools/ingest.py",
          "app/static/app.js", "app/templates/_macros.html", "app/templates/s_home.html",
          "app/templates/s_problem.html", "app/templates/t_review.html", "app/templates/t_report.html",
          "grader/worker.py", "grader/engines.py", "grader/prompts.py", "tools/upload_bundle.py"]
@@ -46,6 +47,7 @@ PROMPT = """너는 독립적이고 깐깐한 코드 리뷰어다. 이 코드는 
 3. 위 규칙과 다르게 동작하는 부분
 4. 서버 오류(500)가 나는 입력, 채점 PC가 꺼지거나 실패했을 때 멈추는 작업
 5. 채점 프롬프트 조작(학생이 사진에 지시문을 써서 점수 올리기) 등 보안 문제
+6. 문제집 등록(PDF/HWP/HWPX 읽기, 한글 수식→LaTeX 변환, 문제-답지 짝짓기)에서 내용이 빠지거나 바뀌는 경우
 
 [출력] 한국어 마크다운으로:
 ## 판정: PASS 또는 FAIL (CRITICAL/HIGH가 하나라도 있으면 FAIL)
