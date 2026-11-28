@@ -67,6 +67,7 @@ def pair_answers(problems, answers):
     for a in answers:
         by_key[key(a)].append(a)
         by_num[key(a)[1]].append(a)
+    problems = [p for p in problems if not (p.get("answer") or "").strip()]
     used = set()
     num_count = defaultdict(int)
     for p in problems:
@@ -226,13 +227,17 @@ def process(files, subject, grade, title, units, engine, workdir, log=print, exi
     # 이어지는 문제는 본문을 고르고 쪽별 영역은 보관한다.
     seen = {}
     for q in problems:
+        if q.get("numbered") is False:
+            continue
         page = q["_page"]
         k = (page.source, _norm_sec(q.get("section")), _norm_num(q.get("number")))
         previous, last_page = seen.get(k, (None, None))
         if previous is not None and (page.image is None or page.no == last_page + 1):
             crops = previous.get("_crops", [(previous["_page"].pdf, previous.get("bbox"))])
+            inline = {field: previous.get(field) or q.get(field) for field in ("answer", "solution")}
             if len(q.get("body", "")) > len(previous.get("body", "")):
                 previous.update(q)
+            previous.update(inline)
             if page.image is not None:
                 previous["_crops"] = crops + [(page.pdf, q.get("bbox"))]
             q["_dup"] = True
@@ -246,7 +251,8 @@ def process(files, subject, grade, title, units, engine, workdir, log=print, exi
     for q in problems:
         page = q["_page"]
         a = q.get("_answer") or {}
-        answer = a.get("answer") or ""
+        answer = (q.get("answer") or "").strip() or a.get("answer") or ""
+        solution = (q.get("solution") or "").strip() or a.get("solution") or ""
         rn = list(q.get("_notes", []))
         if "[도형:" in q.get("body", ""):
             rn.append("한글 도형 개체가 있어 그림이 빠졌을 수 있음 — 원본 확인")
@@ -277,7 +283,7 @@ def process(files, subject, grade, title, units, engine, workdir, log=print, exi
             body=re.sub(r"\[그림 ?\d+\]", "(아래 그림)", re.sub(r"⟦hwp:.*?⟧", "", q.get("body", ""))).strip(),
             image_kind=image_kind,
             answer=answer if answer.strip() else "",
-            solution=re.sub(r"⟦hwp:.*?⟧", "", a.get("solution") or "").strip(),
+            solution=re.sub(r"⟦hwp:.*?⟧", "", solution).strip(),
             source=f"{title} · {page.source} {where}{sec} #{q.get('number', '')}",
             image=image, review_note=" / ".join(rn)))
 
@@ -288,7 +294,8 @@ def process(files, subject, grade, title, units, engine, workdir, log=print, exi
     # 확인 보고서
     by_sec = defaultdict(list)
     for q in problems:
-        by_sec[_norm_sec(q.get("section"))].append(_norm_num(q.get("number")))
+        if q.get("numbered") is not False:
+            by_sec[_norm_sec(q.get("section"))].append(_norm_num(q.get("number")))
     lines = [f"# 등록 보고서: {title} ({SUBJECT_NAMES.get(subject)} {grade})", "",
              f"- 문제 {len(items)}개 · 답지 연결 {paired}개 · "
              f"짝 없는 답지 {len(leftover)}개 · 확인 필요 {sum(1 for i in items if i['review_note'])}개", ""]

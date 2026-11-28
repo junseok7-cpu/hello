@@ -145,7 +145,9 @@ ANALYZE_PAGE = """너는 {subject_name} 문제집·답지를 문제 단위로 �
    - 수식은 LaTeX로 $...$ 안에. 글자에 $...$⟦hwp:원본⟧ 형태가 있으면 원본 한글 수식과 비교해 LaTeX가 맞는지 확인·수정하고 ⟦hwp:...⟧ 는 지운다.
    - 객관식 보기(①~⑤)와 <보기> ㄱ·ㄴ·ㄷ 는 지우지 않고 그대로 둔다.
    - section: 번호가 단원·유형마다 다시 시작되면 그 제목(예: "유형 03"), 아니면 "".
-   - number: 문제 번호 문자열 (예: "034").
+   - number: 문제 번호 문자열 (예: "034"). 번호가 없으면 이 조각 안 순서("1", "2", …), section은 "", numbered는 false. 실제 번호가 있으면 numbered는 true.
+   - answer, solution: 문제 안이나 바로 옆의 정답·해설을 그대로 옮기고 body와 answers에서는 뺀다. 없으면 "".
+   - 그림·질문·선지 앞에 단독으로 나온 "④"와 이어지는 해설도 이 문제의 정답·해설에 해당할 수 있다. 실제 선지는 body에 남긴다.
    - qtype: 옳은 것 고르기 객관식 "mc_right", 옳지 않은 것 고르기 "mc_wrong", 수치 계산 "calc", 그 밖 "essay".
    - unit_id: 아래 단원 목록에서 가장 알맞은 id.
    - difficulty: "하" | "중" | "상". 교재 표시(기본/발전/심화 등)를 따르고, 없으면 단계 수·개념 결합 정도로 판단.
@@ -153,14 +155,14 @@ ANALYZE_PAGE = """너는 {subject_name} 문제집·답지를 문제 단위로 �
    - has_figure: 그림·그래프·도형·실험 장치 그림이 있으면 true.
 {figure_rule}
    - unclear: 글자가 흐리거나 잘려서 확실하지 않은 부분이 있으면 무엇인지 적고, 없으면 "".
-3. 답지(정답·해설)는 answers 에: section, number, answer(최종 답), solution(해설 전문, 수식 LaTeX).
+3. 별도 답지(정답·해설)는 answers 에: section, number, answer(최종 답), solution(해설 전문, 수식 LaTeX).
 4. 앞 쪽 또는 앞 조각의 끝부분(참고용)에서 시작해 이번 부분으로 이어지는 문제는 완성해서 넣고, 참고용 부분에만 있는 문제는 넣지 않는다.
 
 단원 목록:
 {units}
 
 아래 JSON 하나만 출력한다.
-{{"page_type": "problems|answers|mixed|other", "problems": [{{"section": "", "number": "", "body": "", "qtype": "essay", "unit_id": 0, "difficulty": "중", "has_figure": false, {figure_field} "unclear": ""}}], "answers": [{{"section": "", "number": "", "answer": "", "solution": ""}}]}}
+{{"page_type": "problems|answers|mixed|other", "problems": [{{"section": "", "number": "", "numbered": true, "body": "", "answer": "", "solution": "", "qtype": "essay", "unit_id": 0, "difficulty": "중", "has_figure": false, {figure_field} "unclear": ""}}], "answers": [{{"section": "", "number": "", "answer": "", "solution": ""}}]}}
 """
 
 

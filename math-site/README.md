@@ -100,3 +100,13 @@ python -m pytest tests                         # 규칙 테스트
 - `app/curriculum.py` 기본 단원 목록 (사이트 **단원** 메뉴에서 수정)
 - `grader/worker.py` 채점 프로그램, `grader/prompts.py` 채점 기준 문구
 - `tools/upload_bundle.py` Claude가 정리한 문제 묶음 업로드
+
+### Backblaze B2 파일 저장
+
+B2에 비공개 버킷을 만들고 해당 버킷의 목록 조회·읽기·쓰기·삭제 권한이 있는 앱 키를 발급하세요.
+Render에 `S3_ENDPOINT`(B2 S3 엔드포인트, `https://` 포함, 버킷 경로 제외), `S3_BUCKET`(버킷 이름),
+`S3_KEY_ID`(키 ID), `S3_SECRET`(앱 키)을 입력하세요. 필요하면 `S3_REGION`에 B2 리전을 지정하세요.
+네 값이 모두 있으면 새 파일은 B2에 저장돼요.
+
+기존 파일도 옮기려면 사이트와 같은 `DATABASE_URL`과 S3 설정으로
+`cd math-site && python tools/migrate_blobs.py`를 실행하세요.

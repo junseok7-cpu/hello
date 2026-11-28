@@ -275,3 +275,38 @@ def test_process_pdf_solve_failure_continues(tmp_path, monkeypatch):
     assert "AI 풀이 실패: 시간 초과" in items[0]["review_note"]
     assert items[1]["answer"] == "7"
     assert "AI가 푼 문제 1개 (확인 필요)" in report
+
+
+def test_inline_answers_survive_chunk_number_overlap(tmp_path, monkeypatch):
+    import ingest
+
+    pages = [docread.Page(n, "적중문제.hwp", "그림은 실험 장치다.\n ④ \n추의 개수를 비교한다.")
+             for n in (1, 2)]
+    monkeypatch.setattr(docread, "read_any", lambda *args: (pages, {}))
+    separate = [dict(number="1", answer="⑤", solution="별도 답지"),
+                dict(number="5", answer="③", solution="별도 해설")]
+    results = iter([
+        dict(problems=[dict(number="1", numbered=False, body="그림에서 옳지 않은 것은?",
+                            answer="④", solution="추의 개수를 비교한다.", unit_id=1),
+                       dict(number="2", numbered=False, body="물체의 빠르기를 구하시오.",
+                            answer="10", solution="거리 ÷ 시간", unit_id=1)]),
+        dict(problems=[dict(number="1", numbered=False, body="기체의 부피를 구하시오.",
+                            answer="20", solution="눈금을 읽는다.", unit_id=1),
+                       dict(number="5", body="그래프에서 압력을 읽으시오.", unit_id=1)], answers=separate),
+    ])
+
+    def ask(engine, prompt, images, workdir):
+        assert '"numbered": true' in prompt and '단독으로 나온 "④"' in prompt
+        return next(results)
+
+    monkeypatch.setattr(ingest.engines, "ask", ask)
+    items, report = ingest.process(["적중문제.hwp"], "science", "중1", "교재",
+                                   [{"id": 1, "name": "단원"}], "codex", str(tmp_path))
+    assert [(item["answer"], item["solution"]) for item in items] == [
+        ("④", "추의 개수를 비교한다."), ("10", "거리 ÷ 시간"),
+        ("20", "눈금을 읽는다."), ("③", "별도 해설"),
+    ]
+    assert items[0]["body"] == "그림에서 옳지 않은 것은?"
+    assert "빠진 것 같은 번호" not in report
+    assert "문제를 못 찾은 답지 번호: 1" in report
+    assert not any("순서대로" in item["review_note"] for item in items)

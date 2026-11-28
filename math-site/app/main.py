@@ -13,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import logic, reports
+from . import logic, reports, storage
 from .db import (DEFAULT_SETTINGS, DIFFS, GRADES, QTYPES, SUBJECTS, KST, Blob, ImportJob, Ledger, Problem, Report,
                  SessionLocal, StudentProblem, Submission, Unit, User, get_setting,
                  init_db, kst_today, now, set_setting)
@@ -162,10 +162,7 @@ def save_image(db, data: bytes, max_side=1800) -> int:
         data, mime = out.getvalue(), "image/jpeg"
     except Exception:
         raise HTTPException(400, "이미지를 읽을 수 없어요. 사진(JPG/PNG)으로 올려 주세요.")
-    b = Blob(data=data, mime=mime)
-    db.add(b)
-    db.flush()
-    return b.id
+    return storage.put_blob(db, data, mime).id
 
 
 def can_see_blob(db, u: User, blob_id: int) -> bool:
@@ -189,6 +186,8 @@ def blob(bid: int, u: User = Depends(current_user), db=Depends(get_db)):
     b = db.get(Blob, bid)
     if not b or not can_see_blob(db, u, bid):
         raise HTTPException(404)
+    if b.storage_key:
+        return RedirectResponse(storage.blob_url(b), 302, headers={"Cache-Control": "private, no-store"})
     return Response(b.data, media_type=b.mime, headers={"Cache-Control": "private, max-age=86400"})
 
 
@@ -580,10 +579,8 @@ async def t_import_post(title: str = Form(...), grade: str = Form(...), subject:
         data = await f.read()
         if not data:
             continue
-        b = Blob(data=data, mime={".pdf": "application/pdf", ".hwp": "application/x-hwp",
-                                  ".hwpx": "application/hwp+zip"}[ext])
-        db.add(b)
-        db.flush()
+        b = storage.put_blob(db, data, {".pdf": "application/pdf", ".hwp": "application/x-hwp",
+                                       ".hwpx": "application/hwp+zip"}[ext])
         ids.append(str(b.id))
         names.append(os.path.basename(f.filename).replace("\n", " "))
     if not ids:
@@ -650,6 +647,36 @@ def t_import_report(jid: int, request: Request, u: User = Depends(teacher), db=D
 def t_settings(request: Request, u: User = Depends(teacher), db=Depends(get_db)):
     vals = {k: get_setting(db, k) for k in DEFAULT_SETTINGS if k != "last_grader_seen"}
     return render(request, "t_settings.html", user=u, vals=vals, online=grader_online(db))
+
+
+@app.post("/t/settings/delete-old-photos")
+def t_delete_old_photos(days: int = Form(90, ge=1, le=36500),
+                        u: User = Depends(teacher), db=Depends(get_db)):
+    cutoff = now() - timedelta(days=days)
+    expired = {}
+    kept = set()
+    for sub in db.query(Submission).filter(Submission.image_ids != "").order_by(Submission.id).with_for_update():
+        if sub.status == "graded" and sub.graded_at and sub.graded_at < cutoff:
+            for bid in set(sub.images):
+                expired.setdefault(bid, []).append(sub)
+        else:
+            kept.update(sub.images)
+    for image_id, solution_id in db.query(Problem.image_id, Problem.solution_image_id):
+        kept.update((image_id, solution_id))
+    for (ids,) in db.query(ImportJob.blob_ids):
+        kept.update(int(bid) for bid in (ids or "").split(",") if bid)
+    for bid, submissions in expired.items():
+        if bid not in kept and (blob := db.get(Blob, bid, with_for_update=True)):
+            try:
+                storage.delete_object(blob)
+            except Exception:
+                db.commit()
+                raise
+            db.delete(blob)
+        for sub in submissions:
+            sub.image_ids = ",".join(str(i) for i in sub.images if i != bid)
+    db.commit()
+    return back("/t/settings?photos_deleted=1")
 
 
 @app.post("/t/settings")
@@ -737,7 +764,7 @@ def g_blob(bid: int, db=Depends(get_db)):
     b = db.get(Blob, bid)
     if not b:
         raise HTTPException(404)
-    return Response(b.data, media_type=b.mime)
+    return Response(storage.read_blob(b), media_type=b.mime)
 
 
 @app.post("/api/grader/result/{sid}", dependencies=[Depends(grader)])

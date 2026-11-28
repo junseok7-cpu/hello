@@ -68,7 +68,9 @@ class Blob(Base):
     __tablename__ = "blobs"
     id = Column(Integer, primary_key=True)
     mime = Column(String(60), default="image/jpeg")
-    data = Column(LargeBinary, nullable=False)
+    data = Column(LargeBinary)
+    storage_key = Column(String(200))
+    size = Column(Integer)
     created_at = Column(DateTime, default=now)
 
 
@@ -234,9 +236,29 @@ def set_setting(db, key, value):
         db.add(Setting(key=key, value=str(value)))
 
 
+def migrate_blob_schema(conn):
+    columns = {c["name"]: c for c in inspect(conn).get_columns("blobs")}
+    if not columns["data"]["nullable"] and conn.dialect.name == "sqlite":
+        with conn.begin_nested():
+            conn.execute(text("CREATE TABLE blobs_new (id INTEGER PRIMARY KEY, mime VARCHAR(60), "
+                              "data BLOB, created_at DATETIME, storage_key VARCHAR(200), size INTEGER)"))
+            names = ", ".join(c.name for c in Blob.__table__.columns if c.name in columns)
+            conn.execute(text(f"INSERT INTO blobs_new ({names}) SELECT {names} FROM blobs"))
+            conn.execute(text("DROP TABLE blobs"))
+            conn.execute(text("ALTER TABLE blobs_new RENAME TO blobs"))
+        return
+    if not columns["data"]["nullable"]:
+        conn.execute(text("ALTER TABLE blobs ALTER COLUMN data DROP NOT NULL"))
+    for name, sql_type in (("storage_key", "VARCHAR(200)"), ("size", "INTEGER")):
+        if name not in columns:
+            guard = "IF NOT EXISTS " if conn.dialect.name == "postgresql" else ""
+            conn.execute(text(f"ALTER TABLE blobs ADD COLUMN {guard}{name} {sql_type}"))
+
+
 def init_db():
     Base.metadata.create_all(engine)
     with engine.begin() as conn:
+        migrate_blob_schema(conn)
         if "retry_count" not in {c["name"] for c in inspect(conn).get_columns("submissions")}:
             conn.execute(text("ALTER TABLE submissions ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0"))
         if "uq_ledger_submission" not in {i["name"] for i in inspect(conn).get_indexes("ledger")}:

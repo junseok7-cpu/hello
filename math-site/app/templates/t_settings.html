@@ -21,4 +21,10 @@
 <label>'상' 오답률 이상 <input name="hi_wrong" value="{{ vals.hi_wrong }}"></label>
 <label>취약단원에서 낼 비율 <input name="weak_ratio" value="{{ vals.weak_ratio }}"></label></fieldset>
 <button class="btn big">저장</button></form>
+{% if request.query_params.get('photos_deleted') %}<p class="alert ok">오래된 풀이 사진을 지웠어요.</p>{% endif %}
+<form class="card stack" method="post" action="/t/settings/delete-old-photos"
+      onsubmit="return confirm('오래된 풀이 사진을 지울까요? 되돌릴 수 없어요.')">
+<label>채점 후 지난 일수 <input name="days" type="number" value="90" min="1" max="36500" required></label>
+<button class="btn danger">오래된 풀이 사진 지우기 (N일 지난 것)</button>
+</form>
 {% endblock %}

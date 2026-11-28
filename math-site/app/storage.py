@@ -1,0 +1,80 @@
+"""비공개 객체 저장소와 DB 바이트 저장."""
+import os
+from functools import lru_cache
+from urllib.parse import urlsplit
+from uuid import uuid4
+
+from .db import Blob
+
+EXTENSIONS = {
+    "image/jpeg": ".jpg", "image/png": ".png", "application/pdf": ".pdf",
+    "application/x-hwp": ".hwp", "application/hwp+zip": ".hwpx",
+}
+
+
+@lru_cache(maxsize=1)
+def _client(endpoint, key_id, secret, region):
+    import boto3
+    from botocore.config import Config
+
+    return boto3.client("s3", endpoint_url=endpoint, aws_access_key_id=key_id,
+                        aws_secret_access_key=secret, region_name=region,
+                        config=Config(signature_version="s3v4"))
+
+
+def object_store(required=False):
+    endpoint, bucket, key_id, secret = (os.getenv(name) for name in
+                                        ("S3_ENDPOINT", "S3_BUCKET", "S3_KEY_ID", "S3_SECRET"))
+    if all((endpoint, bucket, key_id, secret)):
+        host = urlsplit(endpoint).hostname or ""
+        b2_region = host.split(".")[1] if host.startswith("s3.") and host.endswith(".backblazeb2.com") else ""
+        region = os.getenv("S3_REGION") or b2_region or "us-east-1"
+        return _client(endpoint, key_id, secret, region), bucket
+    if required:
+        raise RuntimeError("S3 설정 네 가지를 모두 입력해 주세요.")
+
+
+def move_bytes(blob, store):
+    client, bucket = store
+    key = f"blobs/{uuid4().hex}{EXTENSIONS.get(blob.mime, '')}"
+    client.put_object(Bucket=bucket, Key=key, Body=blob.data, ContentType=blob.mime)
+    blob.storage_key, blob.size, blob.data = key, len(blob.data), None
+
+
+def put_blob(db, data, mime):
+    blob = Blob(data=data, mime=mime, size=len(data))
+    if store := object_store():
+        move_bytes(blob, store)
+    db.add(blob)
+    db.flush()
+    return blob
+
+
+def read_blob(blob):
+    if not blob.storage_key:
+        return blob.data
+    client, bucket = object_store(required=True)
+    body = client.get_object(Bucket=bucket, Key=blob.storage_key)["Body"]
+    try:
+        return body.read()
+    finally:
+        body.close()
+
+
+def blob_url(blob):
+    client, bucket = object_store(required=True)
+    return client.generate_presigned_url("get_object",
+                                         Params={"Bucket": bucket, "Key": blob.storage_key},
+                                         ExpiresIn=300)
+
+
+def delete_object(blob):
+    if blob.storage_key:
+        client, bucket = object_store(required=True)
+        # B2는 버전 없이 삭제하면 원본을 보관한다.
+        key = blob.storage_key
+        pages = client.get_paginator("list_object_versions").paginate(Bucket=bucket, Prefix=key)
+        versions = [v["VersionId"] for page in pages for v in page.get("Versions", [])
+                    if v["Key"] == key]
+        for version in versions:
+            client.delete_object(Bucket=bucket, Key=key, VersionId=version)
