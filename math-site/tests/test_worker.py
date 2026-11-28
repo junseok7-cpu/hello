@@ -137,8 +137,8 @@ def test_import_finishes_when_every_problem_is_a_duplicate(worker, monkeypatch, 
     assert not posts[-1][1].get("error")
 
 
-@pytest.mark.parametrize("upload", [False, True])
-def test_ingest_cli_defaults_to_codex_and_fetches_problems_only_for_upload(worker, monkeypatch, tmp_path, upload):
+@pytest.mark.parametrize("upload,replace", [(False, False), (True, False), (True, True)])
+def test_ingest_cli_defaults_to_codex_and_fetches_problems_only_for_upload(worker, monkeypatch, tmp_path, upload, replace):
     import ingest
 
     path = Path(__file__).resolve().parents[1] / "tools" / "ingest.py"
@@ -152,7 +152,10 @@ def test_ingest_cli_defaults_to_codex_and_fetches_problems_only_for_upload(worke
     def handler(request):
         calls.append(request.url.path)
         assert request.headers["X-Grader-Token"] == "token"
-        assert dict(request.url.params) == {"subject": "math", "grade": "중1"}
+        params = {"subject": "math", "grade": "중1"}
+        if replace and request.url.path.endswith("/problems"):
+            params["replace_source_prefix"] = "교재"
+        assert dict(request.url.params) == params
         return httpx.Response(200, json=units if request.url.path.endswith("/units") else existing)
 
     client_type = httpx.Client
@@ -162,9 +165,16 @@ def test_ingest_cli_defaults_to_codex_and_fetches_problems_only_for_upload(worke
     monkeypatch.setattr(cli, "ROOT", str(tmp_path))
     monkeypatch.setattr(cli, "local_units", lambda *args: units)
     monkeypatch.setattr(cli.engines, "new_workdir", lambda: str(tmp_path / "work"))
-    monkeypatch.setattr(cli.os, "system", lambda cmd: calls.append("upload_bundle"))
+    def run(command, *, check):
+        assert check
+        assert command[:3] == [sys.executable, str(path.with_name("upload_bundle.py")),
+                               str(tmp_path / "bundles" / "교재")]
+        assert command[3:] == (["--replace", "교재"] if replace else [])
+        calls.append("upload_bundle")
+
+    monkeypatch.setattr(cli.subprocess, "run", run)
     argv = ["ingest.py", "교재.pdf", "--subject", "math", "--grade", "중1", "--title", "교재"]
-    monkeypatch.setattr(sys, "argv", argv + (["--upload"] if upload else []))
+    monkeypatch.setattr(sys, "argv", argv + (["--upload"] if upload else []) + (["--replace"] if replace else []))
 
     def process(files, subject, grade, title, passed_units, engine, workdir, *, existing):
         assert passed_units == units and engine == "codex"
@@ -174,3 +184,46 @@ def test_ingest_cli_defaults_to_codex_and_fetches_problems_only_for_upload(worke
     monkeypatch.setattr(ingest, "process", process)
     cli.main()
     assert calls == (["/api/grader/units", "/api/grader/problems", "upload_bundle"] if upload else [])
+
+
+@pytest.mark.parametrize("replace,delete_status", [(False, 200), (True, 200), (True, 500)])
+def test_upload_bundle_replace_deletes_before_upload_and_disables_source_skip(
+        worker, monkeypatch, tmp_path, replace, delete_status):
+    from urllib.parse import parse_qs
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "tools"))
+    monkeypatch.setattr(worker, "load_config", lambda: ("http://test", "token"))
+    cli = importlib.import_module("upload_bundle")
+    monkeypatch.setattr(cli, "load_config", worker.load_config)
+    (tmp_path / "problems.json").write_text(json.dumps([
+        dict(grade="중1", unit="단원", difficulty="중", source="교재 · 시험.hwp #1"),
+    ]), encoding="utf-8")
+    argv = ["upload_bundle.py", str(tmp_path)] + (["--replace", "교재"] if replace else [])
+    monkeypatch.setattr(sys, "argv", argv)
+    calls = []
+
+    def handler(request):
+        path = request.url.path
+        calls.append(path)
+        assert request.headers["X-Grader-Token"] == "token"
+        if path == "/api/grader/units":
+            return httpx.Response(200, json=[dict(id=3, subject="math", grade="중1", name="단원")])
+        if path == "/api/grader/problems/delete_drafts":
+            assert request.method == "POST" and json.loads(request.content) == {"source_prefix": "교재"}
+            return httpx.Response(delete_status, json={"deleted": 2})
+        assert path == "/api/grader/problem" and request.method == "POST"
+        fields = parse_qs(request.content.decode())
+        assert fields["skip_if_exists"] == (["0"] if replace else ["1"])
+        return httpx.Response(200, json={"id": 5})
+
+    client_type = httpx.Client
+    monkeypatch.setattr(httpx, "Client",
+                        lambda **kwargs: client_type(transport=httpx.MockTransport(handler), **kwargs))
+    if delete_status == 500:
+        with pytest.raises(httpx.HTTPStatusError):
+            cli.main()
+    else:
+        cli.main()
+    assert calls == (["/api/grader/units"]
+                     + (["/api/grader/problems/delete_drafts"] if replace else [])
+                     + (["/api/grader/problem"] if delete_status == 200 else []))

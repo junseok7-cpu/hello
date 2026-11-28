@@ -144,8 +144,8 @@ ANALYZE_PAGE = """너는 {subject_name} 문제집·답지를 문제 단위로 �
    - body: 문제 전문을 그대로. 위 '뽑은 글자'가 있으면 그 글자를 우선 쓰고, 그림에서만 보이는 내용(그래프 눈금 등)은 [그림 설명: ...]으로 덧붙인다.
    - 수식은 LaTeX로 $...$ 안에. 글자에 $...$⟦hwp:원본⟧ 형태가 있으면 원본 한글 수식과 비교해 LaTeX가 맞는지 확인·수정하고 ⟦hwp:...⟧ 는 지운다.
    - 객관식 보기(①~⑤)와 <보기> ㄱ·ㄴ·ㄷ 는 지우지 않고 그대로 둔다.
-   - section: 번호가 단원·유형마다 다시 시작되면 그 제목(예: "유형 03"), 아니면 "".
-   - number: 문제 번호 문자열 (예: "034"). 번호가 없으면 이 조각 안 순서("1", "2", …), section은 "", numbered는 false. 실제 번호가 있으면 numbered는 true.
+   - section: 번호가 단원·유형마다 다시 시작되면 그 제목(예: "유형 03"), 아니면 "". 번호가 보이지 않아도 객관식/선택형과 서답형/서술형처럼 번호를 따로 매기는 구역은 구별하고, 다음 조각에서도 같은 이름을 쓴다. 답지에도 같은 구역 이름을 쓴다.
+   - number: 실제 문제 번호 문자열 (예: "034"). 번호가 보이면 numbered는 true, 번호가 없거나 자동 번호가 글자에 나타나지 않으면 number는 "", numbered는 false. 번호를 추정하지 않는다.
    - answer, solution: 문제 안이나 바로 옆의 정답·해설을 그대로 옮기고 body와 answers에서는 뺀다. 없으면 "".
    - 그림·질문·선지 앞에 단독으로 나온 "④"와 이어지는 해설도 이 문제의 정답·해설에 해당할 수 있다. 실제 선지는 body에 남긴다.
    - qtype: 옳은 것 고르기 객관식 "mc_right", 옳지 않은 것 고르기 "mc_wrong", 수치 계산 "calc", 그 밖 "essay".
@@ -156,13 +156,13 @@ ANALYZE_PAGE = """너는 {subject_name} 문제집·답지를 문제 단위로 �
 {figure_rule}
    - unclear: 글자가 흐리거나 잘려서 확실하지 않은 부분이 있으면 무엇인지 적고, 없으면 "".
 3. 별도 답지(정답·해설)는 answers 에: section, number, answer(최종 답), solution(해설 전문, 수식 LaTeX).
-4. 앞 쪽 또는 앞 조각의 끝부분(참고용)에서 시작해 이번 부분으로 이어지는 문제는 완성해서 넣고, 참고용 부분에만 있는 문제는 넣지 않는다.
+4. 이번 부분 끝에서 문제 본문·보기·표가 잘리면 현재 부분까지 옮기고 truncated를 true로 표시한다. 앞 쪽 또는 앞 조각의 끝부분(참고용)에서 시작해서 이번 부분 첫머리에 이어지는 문제는 continued_from_previous를 true로 표시하고 이번 부분에 있는 나머지 내용만 body에 넣는다. 프로그램이 앞부분과 합친다. 참고용 부분에만 있는 문제는 넣지 않는다. 해당하지 않는 표시는 false로 둔다.
 
 단원 목록:
 {units}
 
 아래 JSON 하나만 출력한다.
-{{"page_type": "problems|answers|mixed|other", "problems": [{{"section": "", "number": "", "numbered": true, "body": "", "answer": "", "solution": "", "qtype": "essay", "unit_id": 0, "difficulty": "중", "has_figure": false, {figure_field} "unclear": ""}}], "answers": [{{"section": "", "number": "", "answer": "", "solution": ""}}]}}
+{{"page_type": "problems|answers|mixed|other", "problems": [{{"section": "", "number": "", "numbered": true, "truncated": false, "continued_from_previous": false, "body": "", "answer": "", "solution": "", "qtype": "essay", "unit_id": 0, "difficulty": "중", "has_figure": false, {figure_field} "unclear": ""}}], "answers": [{{"section": "", "number": "", "answer": "", "solution": ""}}]}}
 """
 
 

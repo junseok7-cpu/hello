@@ -310,3 +310,104 @@ def test_inline_answers_survive_chunk_number_overlap(tmp_path, monkeypatch):
     assert "빠진 것 같은 번호" not in report
     assert "문제를 못 찾은 답지 번호: 1" in report
     assert not any("순서대로" in item["review_note"] for item in items)
+
+
+def test_unnumbered_chunks_join_and_match_answer_table(tmp_path, monkeypatch):
+    import ingest
+    from PIL import Image
+
+    figure = tmp_path / "tail.png"
+    Image.new("RGB", (4, 6), "blue").save(figure)
+    pages = [
+        docread.Page(1, "시험.hwp", "앞부분"),
+        docread.Page(2, "시험.hwp", "⟪앞 조각의 끝부분(참고용)⟫\n앞부분\n⟪여기부터 이번 조각⟫\n뒷부분",
+                     figures={"그림1": str(figure)}),
+        docread.Page(3, "시험.hwp", "정답표"),
+    ]
+    monkeypatch.setattr(docread, "read_any", lambda *args: (pages, {}))
+
+    def question(body, section="객관식", **fields):
+        return dict(number="1", numbered=False, unit_id=1, body=body, section=section, **fields)
+
+    table = [
+        dict(number=str(n), answer=str(n), solution="표 해설")
+        for n in range(1, 24)
+    ] + [dict(section="서답형", number="1", answer="서답", solution="서답 해설"),
+         dict(section="서답형", number="2", answer="남은 답")]
+    heads = [question(f"서로 다른 문항 {n}의 발문") for n in range(1, 12)]
+    heads[0].update(answer="본문 정답", solution="본문 해설")
+    results = iter([
+        dict(problems=heads + [question("12번 앞부분", truncated=True)]),
+        dict(problems=[question("12번 뒷부분 [그림1]", "선택형", continued_from_previous=True,
+                                has_figure=True, figures=["그림1"])]
+             + [question(f"서로 다른 문항 {n}의 발문", "선택형") for n in range(13, 24)]
+             + [question("서술형 첫 문제", "서술형")]),
+        dict(answers=table),
+    ])
+
+    def ask(engine, prompt, images, workdir):
+        assert '"truncated": false' in prompt and '"continued_from_previous": false' in prompt
+        assert "학생 학년 수준의 정석 풀이" not in prompt
+        return next(results)
+
+    monkeypatch.setattr(ingest.engines, "ask", ask)
+    items, report = ingest.process(["시험.hwp"], "math", "중2", "시험",
+                                   [{"id": 1, "name": "단원"}], "codex", str(tmp_path))
+    assert [i["source"].rsplit("#", 1)[1] for i in items] == [str(n) for n in range(1, 24)] + ["1"]
+    assert [i["answer"] for i in items] == ["본문 정답"] + [str(n) for n in range(2, 24)] + ["서답"]
+    assert items[11]["body"] == "12번 앞부분\n12번 뒷부분 (아래 그림)"
+    assert "조각1" in items[11]["source"]
+    assert Image.open(io.BytesIO(items[11]["image"])).size == (4, 6)
+    assert "문제 24개 · 답지 연결 23개 · 짝 없는 답지 2개" in report
+
+
+def test_unnumbered_count_starts_after_printed_number_and_resets_per_file(tmp_path, monkeypatch):
+    import ingest
+
+    def read(path, workdir):
+        return [docread.Page(1, path, path)], {}
+
+    def ask(engine, prompt, images, workdir):
+        problems = [dict(numbered=False, body=prompt.split("[자료]")[1].splitlines()[0],
+                         unit_id=1, answer="답", solution="해설")]
+        if "가.hwp" in prompt:
+            problems.insert(0, dict(number="007", numbered=True, body="인쇄된 번호가 있는 문항",
+                                    unit_id=1, answer="답", solution="해설"))
+        return dict(problems=problems)
+
+    monkeypatch.setattr(docread, "read_any", read)
+    monkeypatch.setattr(ingest.engines, "ask", ask)
+    items, _ = ingest.process(["가.hwp", "나.hwp"], "math", "중2", "시험",
+                              [{"id": 1, "name": "단원"}], "codex", str(tmp_path))
+    assert [i["source"].rsplit("#", 1)[1] for i in items] == ["007", "8", "1"]
+
+
+def test_solve_compares_normalized_answers(tmp_path, monkeypatch):
+    import ingest
+
+    for given, answer, same in [
+        ("⑤", "답은 $45°$ (⑤)", True),
+        ("①, ②", "①", False),
+        ("ㄱ, ㄴ", "ㄴ · ㄱ", True),
+        ("ㄱ, ㄴ", "ㄱ, ㄷ", False),
+        ("12㎠", r"$12\,\mathrm{cm}^{2}$", True),
+        ("45°", r"$45^{\circ}$", True),
+        (r"$\frac{1}{2}$", r"\(\dfrac{1}{2}\)", True),
+        ("12 cm", r"$12\,\mathrm{mm}$", False),
+    ]:
+        monkeypatch.setattr(ingest.engines, "ask", lambda *args: dict(answer=answer, solution="해설"))
+        item = dict(subject="math", grade="중2", unit="단원", qtype="mc_right",
+                    body="문제", answer=given, image=None, review_note="")
+        assert ingest._solve(item, "codex", str(tmp_path))
+        assert item["answer"] == given
+        assert item["review_note"].startswith("해설 없음 → AI 풀이 (확인 필요)")
+        assert ("AI 답과 답지 답이 다름" not in item["review_note"]) == same
+
+
+def test_parse_json_repairs_unescaped_latex_and_preserves_json_escapes():
+    from engines import parse_json
+
+    text = r'''{"latex":"\angle A \frac{1}{2} \unknown", "valid":"a\\b \"q\"\n\t\f\u03c0"}'''
+    assert parse_json(text) == {"latex": r"\angle A \frac{1}{2} \unknown", "valid": 'a\\b "q"\n\t\fπ'}
+    assert parse_json(r'{"latex":"\frac{1}{2}"}') == {"latex": r"\frac{1}{2}"}
+    assert parse_json(r'{"latex":"\\frac{1}{2}"}') == {"latex": r"\frac{1}{2}"}

@@ -25,7 +25,8 @@ def _norm_num(n):
 
 
 def _norm_sec(s):
-    return re.sub(r"\s+", "", str(s or ""))
+    section = re.sub(r"\s+", "", str(s or ""))
+    return {"선택형": "객관식", "서술형": "서답형"}.get(section, section)
 
 
 def analyze_page(page, ctx, engine, workdir):
@@ -129,6 +130,32 @@ def _add_note(item, note):
     item["review_note"] = " / ".join(filter(None, (item["review_note"], note)))
 
 
+def _merge_continuation(previous, current):
+    head = (previous.get("body") or "").rstrip()
+    tail = (current.get("body") or "").lstrip()
+    if tail.startswith(head):
+        previous["body"] = tail
+    elif tail:
+        previous["body"] = f"{head}\n{tail}"
+    for field in ("answer", "solution", "unclear"):
+        previous[field] = previous.get(field) or current.get(field)
+    previous["truncated"] = current.get("truncated", False)
+    previous["has_figure"] = previous.get("has_figure") or current.get("has_figure")
+    page = current["_page"]
+    if page.image is not None:
+        first = previous["_page"]
+        crops = previous.setdefault("_crops", [(first.pdf, previous.get("bbox"))])
+        crops.append((page.pdf, current.get("bbox")))
+    else:
+        previous["_figures"] = list(dict.fromkeys(
+            _figure_paths(previous) + _figure_paths(current)))
+
+
+def _figure_paths(problem):
+    figures = problem["_page"].figures
+    return problem.get("_figures", [figures[f] for f in problem.get("figures") or [] if f in figures])
+
+
 def _deduplicate(items, existing):
     candidates = [(_norm_body(p["body"]), p["has_image"],
                    f"기존 #{p['id']}" + (f" ({p['source']})" if p["source"] else ""), None)
@@ -156,6 +183,34 @@ def _deduplicate(items, existing):
     return kept, skipped, suspected
 
 
+def _normalize_answer(answer):
+    answer = re.sub(r"[㎟㎠㎡㎢㎣㎤㎥㎦]",
+                    lambda m: unicodedata.normalize("NFKC", m[0])[:-1] + "^"
+                    + unicodedata.normalize("NFKC", m[0])[-1], answer)
+    answer = re.sub(r"[⁰¹²³⁴⁵⁶⁷⁸⁹]+", lambda m: "^" + unicodedata.normalize("NFKC", m[0]), answer)
+    answer = unicodedata.normalize("NFKC", answer)
+    answer = re.sub(r"\\(?:left|right)\b", "", answer)
+    answer = re.sub(r"\\(?:text|mathrm|textnormal|operatorname|mathit)\s*\{([^{}]*)\}", r"\1", answer)
+    answer = re.sub(r"\\(?:[,;!: ]|(?:quad|qquad|enspace|thinspace)\b)|[\s$~]", "", answer)
+    answer = re.sub(r"\\[()]|\\[\[\]]", "", answer)
+    answer = re.sub(r"\^\{(?:\\circ|°)\}|\^(?:\\circ|°)|\\circ", "°", answer)
+    answer = re.sub(r"\\[dt]frac\b", r"\\frac", answer)
+    answer = re.sub(r"\\frac([0-9])([0-9])", r"\\frac{\1}{\2}", answer)
+    return re.sub(r"([_^])\{([\w+-])\}", r"\1\2", answer).replace("−", "-")
+
+
+def _same_answer(given, answer):
+    choices = [set(re.findall(r"[①-⑤]", value)) for value in (given, answer)]
+    if all(choices):
+        return choices[0] == choices[1]
+    normalized = [_normalize_answer(value) for value in (given, answer)]
+    combinations = []
+    for value in normalized:
+        labels = re.sub(r"[(),，.·ㆍ、/]", "", value)
+        combinations.append(set(labels) if re.fullmatch(r"[ᄀᄂᄃᄅ]+", labels) else set())
+    return normalized[0] == normalized[1] or bool(combinations[0] and combinations[0] == combinations[1])
+
+
 def _solve(item, engine, workdir):
     given = item["answer"]
     prompt = prompts.SOLVE.format(
@@ -181,8 +236,9 @@ def _solve(item, engine, workdir):
 
     item["answer"] = given or answer
     item["solution"] = "[AI 풀이] " + solution
-    _add_note(item, "답지 없음 → AI 풀이 (확인 필요)")
-    if given and re.sub(r"[\s$]", "", given) != re.sub(r"[\s$]", "", answer):
+    missing = "해설" if given else "답지"
+    _add_note(item, f"{missing} 없음 → AI 풀이 (확인 필요)")
+    if given and not _same_answer(given, answer):
         _add_note(item, f"AI 답과 답지 답이 다름: AI={answer}, 답지={given}")
     if result.get("confidence") == "low":
         _add_note(item, "AI 풀이 확신 낮음")
@@ -209,6 +265,9 @@ def process(files, subject, grade, title, units, engine, workdir, log=print, exi
         if meta.get("scanned"):
             notes.append(f"⚠️ {os.path.basename(path)}: 글자 층이 없는 스캔 PDF라 그림에서 읽었어요. 오타를 꼭 확인하세요.")
         previous_text = ""
+        previous = None
+        last_page = None
+        numbers = defaultdict(int)
         for page in pages:
             ctx["previous_text"], previous_text = previous_text, page.text
             try:
@@ -217,9 +276,21 @@ def process(files, subject, grade, title, units, engine, workdir, log=print, exi
                 notes.append(f"❌ {page.source} {page.no}: AI 분석 실패 ({e})")
                 log(f"  {page.source} {page.no}: 실패 {e}")
                 continue
-            for q in res.get("problems") or []:
+            for index, q in enumerate(res.get("problems") or []):
                 q["_page"] = page
+                if (index == 0 and previous is not None and page.no == last_page + 1
+                        and previous.get("truncated") and q.get("continued_from_previous")):
+                    _merge_continuation(previous, q)
+                    last_page = page.no
+                    continue
+                section = _norm_sec(q.get("section"))
+                if q.get("numbered") is False:
+                    q["number"] = str(numbers[section] + 1)
+                number = _norm_num(q.get("number"))
+                if re.fullmatch(r"[0-9]+", number):
+                    numbers[section] = int(number)
                 problems.append(q)
+                previous, last_page = q, page.no
             for a in res.get("answers") or []:
                 answers.append(a)
             log(f"  {page.source} {page.no}: 문제 {len(res.get('problems') or [])}, 답지 {len(res.get('answers') or [])}")
@@ -246,6 +317,7 @@ def process(files, subject, grade, title, units, engine, workdir, log=print, exi
             seen[k] = q, page.no
     problems = [q for q in problems if not q.get("_dup")]
     leftover = pair_answers(problems, answers)
+    paired = len(answers) - len(leftover)
 
     items = []
     for q in problems:
@@ -265,8 +337,8 @@ def process(files, subject, grade, title, units, engine, workdir, log=print, exi
         elif q.get("has_figure") or page.image is not None and q.get("bbox") and not page.text:
             if page.pdf and q.get("bbox"):
                 image, image_kind = docread.crop_pdf(page.pdf, q["bbox"]), "full"
-            elif q.get("figures"):
-                image = _merge_figures([page.figures[f] for f in q["figures"] if f in page.figures])
+            else:
+                image = _merge_figures(_figure_paths(q))
             if q.get("has_figure") and image is None:
                 rn.append("그림을 못 잘라냄 — 원본 확인")
         uid = q.get("unit_id")
@@ -288,7 +360,6 @@ def process(files, subject, grade, title, units, engine, workdir, log=print, exi
             image=image, review_note=" / ".join(rn)))
 
     items, skipped, suspected = _deduplicate(items, existing)
-    paired = sum(bool(i["answer"] or i["solution"]) for i in items)
     solved = sum(_solve(i, engine, workdir) for i in items if not i["solution"])
 
     # 확인 보고서

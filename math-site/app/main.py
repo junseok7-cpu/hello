@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timedelta
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -815,12 +815,28 @@ def g_units(grade: str = "", subject: str = "", db=Depends(get_db)):
 
 
 @app.get("/api/grader/problems", dependencies=[Depends(grader)])
-def g_problems(subject: str, grade: str, db=Depends(get_db)):
+def g_problems(subject: str, grade: str, replace_source_prefix: str = "", db=Depends(get_db)):
     rows = (db.query(Problem.id, Problem.body, Problem.source, Problem.image_id)
             .join(Unit).filter(Unit.subject == subject, Unit.grade == grade,
                                Problem.status.in_(("draft", "published"))).order_by(Problem.id))
+    if replace_source_prefix.strip():
+        rows = rows.filter(~_replaceable_draft(db, replace_source_prefix))
     return [dict(id=p.id, body=p.body or "", source=p.source or "", has_image=p.image_id is not None)
             for p in rows]
+
+
+def _replaceable_draft(db, source_prefix):
+    return ((Problem.status == "draft")
+            & (func.substr(func.coalesce(Problem.source, ""), 1, len(source_prefix)) == source_prefix)
+            & ~db.query(Submission).filter(Submission.problem_id == Problem.id).exists())
+
+
+@app.post("/api/grader/problems/delete_drafts", dependencies=[Depends(grader)])
+def g_delete_drafts(source_prefix: str = Body(embed=True), db=Depends(get_db)):
+    if not source_prefix.strip():
+        raise HTTPException(400, "source_prefix가 비어 있어요")
+    drafts = db.query(Problem).filter(_replaceable_draft(db, source_prefix))
+    return dict(deleted=_delete_drafts(db, drafts))
 
 
 @app.post("/api/grader/problem", dependencies=[Depends(grader)])
@@ -858,13 +874,20 @@ def g_import_reset(jid: int, db=Depends(get_db)):
     drafts = db.query(Problem).filter(
         Problem.import_job_id == jid, Problem.status == "draft",
         ~db.query(Submission).filter(Submission.problem_id == Problem.id).exists())
-    for p in drafts:
+    _delete_drafts(db, drafts)
+    return dict(ok=True)
+
+
+def _delete_drafts(db, drafts):
+    count = 0
+    for p in drafts.order_by(Problem.id).with_for_update():
         db.query(StudentProblem).filter_by(problem_id=p.id).delete()
         db.query(User).filter_by(current_problem_id=p.id).update({"current_problem_id": None})
         db.query(User).filter_by(current_sci_id=p.id).update({"current_sci_id": None})
         db.delete(p)
+        count += 1
     db.commit()
-    return dict(ok=True)
+    return count
 
 
 @app.post("/api/grader/import/{jid}", dependencies=[Depends(grader)])

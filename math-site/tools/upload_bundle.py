@@ -24,11 +24,20 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("bundle")
     ap.add_argument("--publish", action="store_true", help="초안 대신 바로 출제")
+    ap.add_argument("--replace", metavar="SOURCE_PREFIX", help="이 접두어의 미제출 초안을 교체")
     a = ap.parse_args()
+    if a.replace is not None and not a.replace.strip():
+        ap.error("--replace의 접두어가 비어 있어요")
     url, tok = load_config()
     c = httpx.Client(base_url=url, headers={"X-Grader-Token": tok}, timeout=60)
     units = {(u["subject"], u["grade"], u["name"]): u["id"] for u in c.get("/api/grader/units").json()}
     items = json.load(open(os.path.join(a.bundle, "problems.json"), encoding="utf-8"))
+    if a.replace:
+        if not any((it.get("subject", "math"), it["grade"], it["unit"]) in units for it in items):
+            sys.exit("교체할 새 문제가 없어요")
+        response = c.post("/api/grader/problems/delete_drafts", json={"source_prefix": a.replace})
+        response.raise_for_status()
+        print(f"기존 초안 {response.json()['deleted']}개 삭제")
     ok = 0
     for i, it in enumerate(items):
         uid = units.get((it.get("subject", "math"), it["grade"], it["unit"]))
@@ -43,7 +52,7 @@ def main():
             unit_id=uid, difficulty=it["difficulty"], qtype=it.get("qtype", "essay"), body=it.get("body", ""),
             review_note=it.get("review_note", ""), image_kind=it.get("image_kind", "figure"), answer=it.get("answer", ""),
             solution=it.get("solution", ""), source=it.get("source", ""),
-            status="published" if a.publish else "draft", skip_if_exists=1), files=files or None)
+            status="published" if a.publish else "draft", skip_if_exists=int(not a.replace)), files=files or None)
         r.raise_for_status()
         ok += 1
     print(f"{ok}/{len(items)}개 등록 완료 ({'출제' if a.publish else '초안'})")

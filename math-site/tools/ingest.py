@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,7 +36,10 @@ def main():
     ap.add_argument("--title", required=True)
     ap.add_argument("--engine", default="codex", choices=["claude", "codex"])
     ap.add_argument("--upload", action="store_true")
+    ap.add_argument("--replace", action="store_true", help="같은 제목의 미제출 초안을 교체 (--upload 필요)")
     a = ap.parse_args()
+    if a.replace and (not a.upload or not a.title.strip()):
+        ap.error("--replace에는 --upload와 비어 있지 않은 --title이 필요합니다")
 
     existing = []
     if a.upload:
@@ -46,7 +50,13 @@ def main():
             response = c.get("/api/grader/units", params={"grade": a.grade, "subject": a.subject})
             response.raise_for_status()
             units = response.json()
-            existing = fetch_problems(c, a.subject, a.grade)
+            if a.replace:
+                response = c.get("/api/grader/problems", params=dict(
+                    subject=a.subject, grade=a.grade, replace_source_prefix=a.title))
+                response.raise_for_status()
+                existing = response.json()
+            else:
+                existing = fetch_problems(c, a.subject, a.grade)
     else:
         units = local_units(a.subject, a.grade)
     if not units:
@@ -74,7 +84,10 @@ def main():
     print(report)
     print(f"\n묶음: {out}")
     if a.upload:
-        os.system(f'"{sys.executable}" "{os.path.join(HERE, "upload_bundle.py")}" "{out}"')
+        command = [sys.executable, os.path.join(HERE, "upload_bundle.py"), out]
+        if a.replace:
+            command.extend(["--replace", a.title])
+        subprocess.run(command, check=True)
 
 
 if __name__ == "__main__":

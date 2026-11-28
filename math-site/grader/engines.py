@@ -76,8 +76,20 @@ def parse_json(text: str) -> dict:
             raise EngineError("AI 응답에 JSON이 없어요: " + text[:300])
         cand = text[s:e + 1]
     try:
-        return json.loads(cand)
+        # JSON treats a bare LaTeX \frac as a form feed followed by "rac".
+        fractions = re.sub(r'\\(?:frac(?=\s*\{)|[\s\S])',
+                           lambda m: "\\" + m[0] if m[0] == r"\frac" else m[0], cand)
+        return json.loads(fractions)
     except json.JSONDecodeError as ex:
+        if ex.msg.startswith("Invalid \\escape") or ex.msg.startswith("Invalid \\u"):
+            valid = re.compile(r'\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4})')
+            repaired = re.sub(r'\\(?:u[0-9a-fA-F]{4}|[\s\S])',
+                              lambda m: m[0] if valid.fullmatch(m[0]) else "\\" + m[0],
+                              fractions)
+            try:
+                return json.loads(repaired)
+            except json.JSONDecodeError as retry:
+                ex = retry
         raise EngineError(f"JSON 해석 실패 ({ex}): " + cand[:300])
 
 

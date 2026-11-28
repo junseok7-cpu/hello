@@ -219,3 +219,33 @@ def test_grader_problems_requires_token_and_filters_by_subject_grade(db, client)
         dict(id=published.id, body="x", source="", has_image=False),
         dict(id=draft.id, body="x", source="교재", has_image=True),
     ]
+
+
+def test_delete_drafts_matches_literal_prefix_and_preserves_used_problems(db, client):
+    c, u = client
+    deleted, used, published, other, archived = [prob(db, u.grade, "하") for _ in range(5)]
+    deleted.source = used.source = published.source = archived.source = "교재_% · 시험.hwp"
+    other.source = "교재AX · 다른 시험.hwp"
+    submit(db, u, used, 95)
+    deleted.status = used.status = other.status = "draft"
+    archived.status = "archived"
+    u.current_problem_id = deleted.id
+    db.add(D.StudentProblem(user_id=u.id, problem_id=deleted.id))
+    db.flush()
+    deleted_id = deleted.id
+
+    url = "/api/grader/problems/delete_drafts"
+    payload = {"source_prefix": "교재_%"}
+    assert c.post(url, json=payload).status_code == 401
+    for prefix in ("", " \t"):
+        assert c.post(url, headers=auth(), json={"source_prefix": prefix}).status_code == 400
+    existing = c.get("/api/grader/problems", headers=auth(), params={
+        "subject": "math", "grade": u.grade, "replace_source_prefix": payload["source_prefix"],
+    }).json()
+    assert {p["id"] for p in existing} == {used.id, published.id, other.id}
+    assert c.post(url, headers=auth(), json=payload).json() == {"deleted": 1}
+    assert db.get(D.Problem, deleted_id) is None
+    assert u.current_problem_id is None
+    assert db.query(D.StudentProblem).filter_by(problem_id=deleted_id).count() == 0
+    assert all(db.get(D.Problem, p.id) is not None for p in (used, published, other, archived))
+    assert c.post(url, headers=auth(), json=payload).json() == {"deleted": 0}
